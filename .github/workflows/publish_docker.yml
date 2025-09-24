@@ -59,5 +59,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            twosix26/alist-mikananirss:v${{ steps.get_version.outputs.version }}
-            twosix26/alist-mikananirss:latest
+            okami-horo/alist-mikananirss:v${{ steps.get_version.outputs.version }}
+            okami-horo/alist-mikananirss:latest
