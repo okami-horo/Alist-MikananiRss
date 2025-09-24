@@ -20,6 +20,7 @@ from alist_mikananirss.alist.tasks import (
     AlistTransferTask,
 )
 from alist_mikananirss.common.database import SubscribeDatabase
+from alist_mikananirss.utils.torrent_converter import batch_convert_torrents_to_magnets
 from alist_mikananirss.websites.models import ResourceInfo
 
 from ..utils import FixedSizeSet, Singleton
@@ -137,11 +138,20 @@ class TaskMonitor:
         logger.debug(f"Linked [{download_task.url}] to {matched_tf_task.uuid}")
         return matched_tf_task
 
-    async def _post_process(self, tf_task: AlistTransferTask, resource: ResourceInfo):
+    async def _post_process(self, task: AlistTask, resource: ResourceInfo):
         "Something to do after download task success"
         logger.info(f"Download {resource.resource_title} success")
         if self.use_renamer:
-            remote_filepath = tf_task.target_path
+            # Get target path from different task types
+            if task.task_type == AlistTaskType.TRANSFER:
+                remote_filepath = task.target_path
+            elif task.task_type == AlistTaskType.DOWNLOAD:
+                # For download tasks, construct path from download_path and name
+                remote_filepath = f"{task.download_path}/{task.name}"
+            else:
+                logger.warning(f"Unknown task type: {task.task_type}")
+                return
+
             await AnimeRenamer.rename(remote_filepath, resource)
         if self.need_notification:
             await NotificationSender.add_resource(resource)
@@ -156,10 +166,12 @@ class TaskMonitor:
             if task.task_type == AlistTaskType.DOWNLOAD:
                 tf_task = await self._find_transfer_task(task)
                 if tf_task is None:
-                    logger.error(
-                        f"Can't find transfer task for [{self.task_resource_map[task].resource_title}]"
-                    )
+                    # No transfer task found, assume direct download (e.g., 115 Cloud internal storage)
+                    resource = self.task_resource_map[task]
+                    logger.info(f"No transfer task needed for [{resource.resource_title}], processing directly")
+                    await self._post_process(task, resource)
                 else:
+                    # Transfer task found, monitor it for completion
                     self.running_tasks.append(tf_task)
                     self.task_resource_map[tf_task] = self.task_resource_map[task]
             elif task.task_type == AlistTaskType.TRANSFER:
@@ -243,10 +255,12 @@ class DownloadManager(metaclass=Singleton):
         use_renamer: bool = False,
         need_notification: bool = False,
         db: SubscribeDatabase = None,
+        convert_torrent_to_magnet: bool = False,
     ):
         self.alist_client = alist_client
         self.base_download_path = base_download_path
         self.db = db
+        self.convert_torrent_to_magnet = convert_torrent_to_magnet
         self.task_monitor = TaskMonitor(
             alist_client=alist_client,
             db=db,
@@ -262,6 +276,7 @@ class DownloadManager(metaclass=Singleton):
         use_renamer: bool = False,
         need_notification: bool = False,
         db: SubscribeDatabase = None,
+        convert_torrent_to_magnet: bool = False,
     ) -> None:
         cls(
             alist_client=alist_client,
@@ -269,6 +284,7 @@ class DownloadManager(metaclass=Singleton):
             use_renamer=use_renamer,
             need_notification=need_notification,
             db=db,
+            convert_torrent_to_magnet=convert_torrent_to_magnet,
         )
 
     def _build_download_path(self, resource: ResourceInfo) -> str:
@@ -310,9 +326,36 @@ class DownloadManager(metaclass=Singleton):
         # facilitating batch creation of download tasks and reducing requests to the Alist API
         ## mapping of {download_path: [torrent_url]}
         path_urls: dict[str, list[str]] = {}
+        # Also keep track of resource info for logging
+        path_resources: dict[str, list[ResourceInfo]] = {}
+
         for resource in new_resources:
             download_path = self._build_download_path(resource)
             path_urls.setdefault(download_path, []).append(resource.torrent_url)
+            path_resources.setdefault(download_path, []).append(resource)
+
+        # Convert torrent URLs to magnet links if enabled
+        if self.convert_torrent_to_magnet:
+            logger.info("Converting torrent files to magnet links...")
+            converted_path_urls = {}
+            for download_path, urls in path_urls.items():
+                # Convert all torrent URLs to magnet links
+                magnet_links = await batch_convert_torrents_to_magnets(urls)
+                # Filter out failed conversions (None values)
+                successful_magnets = [magnet for magnet in magnet_links if magnet]
+
+                if successful_magnets:
+                    converted_path_urls[download_path] = successful_magnets
+                    logger.info(
+                        f"Converted {len(successful_magnets)}/{len(urls)} torrents to magnets for {download_path}"
+                    )
+                else:
+                    logger.warning(
+                        f"No successful conversions for {download_path}, skipping"
+                    )
+
+            path_urls = converted_path_urls
+
         # start to request the Alist Download API
         task_list = []
         for download_path, urls in path_urls.items():
@@ -320,9 +363,13 @@ class DownloadManager(metaclass=Singleton):
                 task_list += await self.alist_client.add_offline_download_task(
                     download_path, urls
                 )
+                resources = path_resources.get(download_path, [])
                 logger.info(
                     f"Start to download {len(urls)} resources to [{download_path}]"
                 )
+                # Log which resources are being downloaded
+                for resource in resources:
+                    logger.debug(f"Downloading: {resource.resource_title}")
             except Exception as e:
                 logger.error(f"Error when add offline download task: {e}")
                 continue

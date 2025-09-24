@@ -5,6 +5,7 @@ from loguru import logger
 from alist_mikananirss import SubscribeDatabase
 from alist_mikananirss.websites import Website, WebsiteFactory
 from alist_mikananirss.websites.models import ResourceInfo
+from alist_mikananirss.utils.torrent_converter import batch_convert_torrents_to_magnets
 
 from .download_manager import DownloadManager
 from .filter import RegexFilter
@@ -20,6 +21,7 @@ class RssMonitor:
         filter: RegexFilter,
         db: SubscribeDatabase,
         use_extractor: bool = False,
+        convert_torrent_to_magnet: bool = False,
     ) -> None:
         """The rss feed manager"""
         self.subscribe_urls = subscribe_urls
@@ -29,6 +31,7 @@ class RssMonitor:
         self.filter = filter
         self.db = db
         self.use_extractor = use_extractor
+        self.convert_torrent_to_magnet = convert_torrent_to_magnet
 
         self.interval_time = 300
 
@@ -79,6 +82,25 @@ class RssMonitor:
                 logger.info(f"Find new resource: {resource_info}")
 
         new_resources = list(new_resources_set)
+
+        # Convert torrent URLs to magnet links if enabled
+        if self.convert_torrent_to_magnet:
+            logger.info("Converting torrent files to magnet links in RSS monitor...")
+            torrent_urls = [resource.torrent_url for resource in new_resources]
+            magnet_links = await batch_convert_torrents_to_magnets(torrent_urls)
+
+            # Update resources with magnet links
+            for i, resource in enumerate(new_resources):
+                if i < len(magnet_links) and magnet_links[i]:
+                    old_url = resource.torrent_url
+                    resource.torrent_url = magnet_links[i]
+                    logger.info(f"Converted {old_url} to magnet link for {resource.resource_title}")
+                    logger.debug(f"Original torrent URL: {old_url}")
+                    logger.debug(f"New magnet URL: {magnet_links[i]}")
+                else:
+                    logger.error(f"Failed to convert torrent to magnet for {resource.resource_title}")
+                    logger.error(f"Original torrent URL: {resource.torrent_url}")
+
         return new_resources
 
     async def run(self):
