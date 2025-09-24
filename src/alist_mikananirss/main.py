@@ -108,6 +108,7 @@ async def run():
         use_renamer=cfg.rename.enable,
         need_notification=cfg.notification.enable,
         db=db,
+        convert_torrent_to_magnet=cfg.alist.convert_torrent_to_magnet,
     )
 
     # extractor
@@ -147,6 +148,7 @@ async def run():
         db=db,
         filter=regex_filter,
         use_extractor=cfg.rename.enable,
+        convert_torrent_to_magnet=cfg.alist.convert_torrent_to_magnet,
     )
     rss_monitor.set_interval_time(cfg.common.interval_time)
 

@@ -10,6 +10,7 @@ dependencies = [
     "async-lru>=2.0.4",
     "asyncio>=3.4.3",
     "beautifulsoup4>=4.12.3",
+    "bencodepy>=0.9.5",
     "feedparser>=6.0.11",
     "google-genai>=1.10.0",
     "loguru>=0.7.3",

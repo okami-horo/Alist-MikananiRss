@@ -27,6 +27,10 @@ class AlistConfig(BaseModel):
         default=AlistDownloaderType.QBIT, description="Alist Downloader type"
     )
     download_path: str = Field(..., description="Download path for Alist Downloader")
+    convert_torrent_to_magnet: bool = Field(
+        default=False,
+        description="Convert torrent files to magnet links before downloading",
+    )
 
     @field_validator("base_url")
     @classmethod
