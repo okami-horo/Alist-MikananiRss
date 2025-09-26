@@ -83,12 +83,53 @@ class AlistTask(ABC):
     task_type: AlistTaskType = field(init=False)
 
     @classmethod
+    def _parse_datetime(cls, datetime_str: str) -> datetime:
+        """Parse datetime string with flexible format handling."""
+        if not datetime_str:
+            return None
+
+        # Handle different timezone formats
+        if datetime_str.endswith('+Z'):
+            # Format: 2025-09-26T11:23:18.09387+Z
+            # Convert to: 2025-09-26T11:23:18.093870Z
+            datetime_str = datetime_str[:-2] + '0Z'
+        elif '+00:00' in datetime_str:
+            # Format: 2025-09-26T11:23:18.09387+00:00
+            # Convert to: 2025-09-26T11:23:18.093870Z
+            datetime_str = datetime_str.replace('+00:00', 'Z')
+        elif '+08:00' in datetime_str:
+            # Format: 2025-09-26T11:23:18.09387+08:00
+            # Convert to: 2025-09-26T11:23:18.093870Z
+            datetime_str = datetime_str.replace('+08:00', 'Z')
+        elif not datetime_str.endswith('Z'):
+            # Format: 2025-09-26T11:23:18.09387
+            # Add Z: 2025-09-26T11:23:18.09387Z
+            datetime_str += 'Z'
+
+        # Ensure microsecond part is 6 digits
+        if '.' in datetime_str:
+            parts = datetime_str.split('.')
+            if len(parts) == 2:
+                time_part = parts[1]
+                if 'Z' in time_part:
+                    microsec_str = time_part[:-1]
+                    if len(microsec_str) < 6:
+                        # Pad with zeros
+                        microsec_str = microsec_str.ljust(6, '0')
+                    elif len(microsec_str) > 6:
+                        # Truncate to 6 digits
+                        microsec_str = microsec_str[:6]
+                    datetime_str = f"{parts[0]}.{microsec_str}Z"
+
+        return datetime.strptime(datetime_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+
+    @classmethod
     def from_json(cls, json_data: dict) -> "AlistTask":
         """Creates an AlistTask instance from a JSON dictionary."""
         creator = json_data["creator"]
         creator_role = CreatorRole(json_data["creator_role"])
         end_time = (
-            datetime.strptime(json_data["end_time"][:26] + "Z", "%Y-%m-%dT%H:%M:%S.%fZ")
+            cls._parse_datetime(json_data["end_time"])
             if json_data["end_time"]
             else None
         )
@@ -97,9 +138,7 @@ class AlistTask(ABC):
         name = json_data["name"]
         progress = json_data["progress"]
         start_time = (
-            datetime.strptime(
-                json_data["start_time"][:26] + "Z", "%Y-%m-%dT%H:%M:%S.%fZ"
-            )
+            cls._parse_datetime(json_data["start_time"])
             if json_data["start_time"]
             else None
         )

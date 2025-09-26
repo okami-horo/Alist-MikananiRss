@@ -334,27 +334,8 @@ class DownloadManager(metaclass=Singleton):
             path_urls.setdefault(download_path, []).append(resource.torrent_url)
             path_resources.setdefault(download_path, []).append(resource)
 
-        # Convert torrent URLs to magnet links if enabled
-        if self.convert_torrent_to_magnet:
-            logger.info("Converting torrent files to magnet links...")
-            converted_path_urls = {}
-            for download_path, urls in path_urls.items():
-                # Convert all torrent URLs to magnet links
-                magnet_links = await batch_convert_torrents_to_magnets(urls)
-                # Filter out failed conversions (None values)
-                successful_magnets = [magnet for magnet in magnet_links if magnet]
-
-                if successful_magnets:
-                    converted_path_urls[download_path] = successful_magnets
-                    logger.info(
-                        f"Converted {len(successful_magnets)}/{len(urls)} torrents to magnets for {download_path}"
-                    )
-                else:
-                    logger.warning(
-                        f"No successful conversions for {download_path}, skipping"
-                    )
-
-            path_urls = converted_path_urls
+        # Torrent URLs are already converted to magnet links in RSS monitor
+        # Skip redundant conversion to avoid duplicate tasks
 
         # start to request the Alist Download API
         task_list = []
