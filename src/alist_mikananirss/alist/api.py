@@ -78,7 +78,7 @@ class Alist:
     ) -> list[AlistDownloadTask]:
         response_data = await self._api_call(
             "POST",
-            "api/fs/add_offline_download",
+            "/api/fs/add_offline_download",
             json={
                 "delete_policy": policy.value,
                 "path": save_path,
@@ -112,7 +112,7 @@ class Alist:
         }
 
         with open(file_path_encoded, "rb") as f:
-            await self._api_call("PUT", "api/fs/put", custom_headers=headers, data=f)
+            await self._api_call("PUT", "/api/fs/put", custom_headers=headers, data=f)
         return True
 
     async def list_dir(
