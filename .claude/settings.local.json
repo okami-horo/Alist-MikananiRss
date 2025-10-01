@@ -4,7 +4,12 @@
       "Bash(python:*)",
       "Bash(chcp:*)",
       "Bash(iconv:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(./venv/bin/python:*)",
+      "Read(//usr/bin/**)",
+      "Bash(python3:*)",
+      "Bash(./.venv/bin/python:*)",
+      "Bash(uv:*)"
     ],
     "deny": [],
     "ask": []
