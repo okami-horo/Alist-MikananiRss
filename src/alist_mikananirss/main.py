@@ -19,6 +19,7 @@ from alist_mikananirss import (
 )
 from alist_mikananirss.alist import Alist
 from alist_mikananirss.bot import BotFactory, NotificationBot
+from alist_mikananirss.core.webdav_fixer import WebDAVNestedFixer
 from alist_mikananirss.extractor import Extractor, LLMExtractor, create_llm_provider
 
 
@@ -71,15 +72,99 @@ def init_notification(cfg: AppConfig):
     NotificationSender.initialize(notification_bots, cfg.notification.interval_time)
 
 
+async def run_webdav_fix(args, cfg):
+    """运行WebDAV修复功能"""
+    logger.info("启动WebDAV嵌套目录修复工具")
+
+    # alist
+    alist_client = Alist(cfg.alist.base_url, cfg.alist.token, cfg.alist.downloader)
+    alist_ver = await alist_client.get_alist_ver()
+    if alist_ver < "3.42.0":
+        raise ValueError(f"Unsupported Alist version: {alist_ver}")
+
+    # 创建WebDAV修复器
+    fixer = WebDAVNestedFixer(alist_client, verbose=args.verbose)
+
+    try:
+        # 执行修复
+        result = await fixer.fix_nested_structure(
+            target_dir=args.dir,
+            dry_run=not args.force,
+            handle_conflicts=args.conflicts,
+            recursive=args.recursive
+        )
+
+        # 输出结果
+        print(f"\n最终结果: {'成功' if result['success'] else '部分失败'}")
+        print(f"总计发现: {result['total_found']}")
+        print(f"成功处理: {result['success_count']}")
+        print(f"跳过: {result['skip_count']}")
+        print(f"错误: {result['error_count']}")
+
+        if result['errors']:
+            print("\n错误详情:")
+            for error in result['errors']:
+                print(f"  - {error}")
+
+        return result['success']
+
+    finally:
+        await alist_client.close()
+
+
 async def run():
-    parser = argparse.ArgumentParser(description="Alist Mikanani RSS")
-    parser.add_argument(
+    parser = argparse.ArgumentParser(description="Alist Mikanani RSS 工具集")
+    subparsers = parser.add_subparsers(dest='command', help='可用命令')
+
+    # RSS监控命令（默认）
+    monitor_parser = subparsers.add_parser('monitor', help='启动RSS监控（默认命令）')
+    monitor_parser.add_argument(
         "--config",
         default="config.yaml",
-        help="Path to the configuration file",
+        help="配置文件路径",
+    )
+
+    # WebDAV修复命令
+    webdav_parser = subparsers.add_parser('webdav-fix', help='修复WebDAV嵌套目录结构')
+    webdav_parser.add_argument(
+        "--config", "-c",
+        default="config.yaml",
+        help="配置文件路径",
+    )
+    webdav_parser.add_argument(
+        "--dir", "-d",
+        default=".",
+        help="指定要处理的目录路径",
+    )
+    webdav_parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="执行实际操作（默认为预览模式）",
+    )
+    webdav_parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="显示详细输出",
+    )
+    webdav_parser.add_argument(
+        "--recursive", "-r",
+        action="store_true",
+        help="递归扫描子目录（默认仅扫描当前目录）",
+    )
+    webdav_parser.add_argument(
+        "--conflicts", "-C",
+        choices=["skip", "rename", "overwrite"],
+        default="overwrite",
+        help="冲突处理策略 (skip|rename|overwrite，默认为overwrite)",
     )
 
     args = parser.parse_args()
+
+    # 如果没有指定命令，默认启动监控（向后兼容）
+    if args.command is None:
+        args.command = 'monitor'
+        # 为monitor命令创建默认args
+        args.config = getattr(args, 'config', 'config.yaml')
 
     cfg_manager = ConfigManager()
     cfg = cfg_manager.load_config(args.config)
@@ -89,6 +174,12 @@ async def run():
     logger.info("Loaded config Successfully")
     logger.info(f"Config: \n{cfg}")
 
+    # 根据命令执行不同功能
+    if args.command == 'webdav-fix':
+        # WebDAV修复功能
+        return await run_webdav_fix(args, cfg)
+
+    # RSS监控功能（默认或monitor命令）
     # proxy
     init_proxies(cfg)
 
