@@ -1,19 +1,33 @@
 """
 WebDAV嵌套目录修复模块
 
-提供修复WebDAV嵌套目录结构的功能，与主项目架构统一。
+完全采用fix_nested_structure_webdav_final.py的方案，确保稳定可靠。
 """
 
 import asyncio
 import hashlib
 import json
+import os
 import random
 import time
 from typing import Dict, List, Optional, Tuple
 
 from loguru import logger
+import yaml
 
-from alist_mikananirss.alist.api import Alist
+# 检查webdav4库是否可用
+try:
+    import webdav4
+    from webdav4.client import Client
+    # webdav4使用httpx的异常
+    import httpx
+    ClientError = httpx.HTTPError
+    ResourceNotFound = httpx.HTTPStatusError
+except ImportError as e:
+    logger.error(f"错误: 需要安装 webdav4 库")
+    logger.error(f"导入错误: {e}")
+    logger.error("请运行: pip install webdav4")
+    raise ImportError("需要安装webdav4库")
 
 
 class WebDAVOperationError(Exception):
@@ -22,57 +36,114 @@ class WebDAVOperationError(Exception):
 
 
 class WebDAVNestedFixer:
-    """WebDAV嵌套目录修复器 - 集成版本"""
+    """WebDAV嵌套目录修复器 - 完全基于final脚本"""
 
-    def __init__(self, alist_client: Alist, verbose: bool = False):
+    def __init__(self, alist_client=None, verbose: bool = False, url: str = None, username: str = None, password: str = None):
         """
-        初始化WebDAV修复器
+        初始化WebDAV修复器 - 完全基于final脚本
 
         Args:
-            alist_client: Alist客户端实例
+            alist_client: 保持兼容性，但实际不使用
             verbose: 是否显示详细输出
+            url: WebDAV服务器URL
+            username: WebDAV用户名
+            password: WebDAV密码
         """
-        self.client = alist_client
         self.verbose = verbose
+        self.alist_client = alist_client  # 保持兼容性
 
-        # 设置速率限制 - 每秒最多2个请求
-        self.request_delay_min = 0.5  # 最小延迟 500ms
-        self.request_delay_max = 0.6  # 最大延迟 600ms，添加小随机范围
-        self.last_request_time = 0
+        # 从alist_client配置中提取WebDAV信息，或者使用直接传入的参数
+        if url is None and alist_client:
+            # 从alist_client.base_url构建WebDAV URL
+            base_url = alist_client.base_url.rstrip('/')
+            self.url = base_url + '/dav'
+        elif url:
+            self.url = url
+        else:
+            # 默认值
+            self.url = "http://127.0.0.1:5244/dav"
 
-        # 测试连接
+        # 获取WebDAV认证信息
+        webdav_config = self._load_webdav_config()
+
+        if webdav_config:
+            # 从配置文件读取
+            self.url = webdav_config.get('url', self.url)
+            self.username = webdav_config.get('username', 'admin')
+            self.password = webdav_config.get('password', '')
+            logger.info(f"从配置文件加载WebDAV认证信息: {self.username}@{self.url}")
+        else:
+            # 使用直接传入的参数
+            if username is None:
+                self.username = "admin"
+            else:
+                self.username = username
+
+            if password is None:
+                self.password = ""
+            else:
+                self.password = password
+
+            logger.info(f"使用传入的WebDAV认证信息: {self.username}@{self.url}")
+
+        # 创建WebDAV客户端 - 基于final脚本
+        self.client = Client(
+            base_url=self.url,
+            auth=(self.username, self.password)
+        )
+
+        # 测试连接 - 异步版本
         asyncio.create_task(self._test_connection())
 
+    def _load_webdav_config(self) -> Optional[Dict]:
+        """
+        加载WebDAV配置文件
+
+        Returns:
+            Dict or None: 配置信息或None
+        """
+        config_paths = [
+            'webdav_config.yaml',
+            'config/webdav_config.yaml',
+            '/workspace/Alist-MikananiRss/webdav_config.yaml'
+        ]
+
+        for config_path in config_paths:
+            if os.path.exists(config_path):
+                try:
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config = yaml.safe_load(f)
+                        webdav_config = config.get('webdav')
+                        if webdav_config:
+                            return webdav_config
+                except Exception as e:
+                    logger.warning(f"读取WebDAV配置文件失败 {config_path}: {str(e)}")
+                    continue
+
+        return None
+
     async def _test_connection(self):
-        """测试Alist连接"""
+        """测试WebDAV连接 - 基于final脚本"""
         try:
-            await self.client._api_call('GET', '/api/fs/list', params={'path': '/'})
-            logger.info(f"成功连接到Alist服务器: {self.client.base_url}")
+            # 使用WebDAV客户端测试连接
+            self.client.ls('/')
+            logger.info(f"成功连接到WebDAV服务器: {self.url}")
         except Exception as e:
-            logger.error(f"连接Alist服务器失败: {str(e)}")
+            logger.error(f"连接WebDAV服务器失败: {str(e)}")
             raise WebDAVOperationError(f"连接失败: {str(e)}")
 
-    def _rate_limit_delay(self):
-        """
-        实现速率限制，在请求之间添加随机延迟
-        """
-        current_time = time.time()
-        if self.last_request_time > 0:
-            elapsed = current_time - self.last_request_time
-            # 如果距离上次请求时间太短，则等待
-            min_delay = self.request_delay_min + random.uniform(0, self.request_delay_max - self.request_delay_min)
-            if elapsed < min_delay:
-                sleep_time = min_delay - elapsed
-                if self.verbose:
-                    logger.debug(f"速率限制延迟: {sleep_time:.2f}s")
-                time.sleep(sleep_time)
-
-        self.last_request_time = time.time()
-
     def _normalize_path(self, path: str) -> str:
-        """标准化路径"""
+        """标准化路径 - 完全避免Windows路径转换，采用final脚本"""
+        # 纯字符串处理，不使用任何os.path函数
         if not path:
             return '/'
+
+        # 如果路径看起来像 Windows 绝对路径（如 C:\），我们需要将其转换为WebDAV路径
+        if len(path) > 1 and path[1] == ':':
+            # 移除驱动器号，只保留后面的路径
+            path = path[2:]
+            # 将反斜杠转换为正斜杠
+            path = path.replace('\\', '/')
 
         # 确保以 / 开头
         if not path.startswith('/'):
@@ -85,18 +156,30 @@ class WebDAVNestedFixer:
         return path
 
     def _basename(self, path: str) -> str:
-        """获取文件名/目录名"""
+        """获取文件名/目录名（避免Windows路径转换）"""
+        # 纯字符串处理，避免路径转换
         path = path.rstrip('/')
         parts = path.split('/')
         return parts[-1] if parts else ''
 
+    def _join_path(self, *parts) -> str:
+        """连接路径（避免Windows路径转换）"""
+        # 纯字符串处理，避免路径转换
+        result = '/'.join(str(part).strip('/') for part in parts if part)
+        return '/' + result if result.startswith('/') else result
+
+    def _handle_webdav_error(self, error: Exception, operation: str, path: str = ""):
+        """处理WebDAV错误"""
+        error_msg = f"[{operation}] {path}: WebDAV操作失败: {str(error)}"
+        logger.error(error_msg)
+        raise WebDAVOperationError(error_msg)
+
     async def scan_nested_directories(self, directory: str, recursive: bool = False) -> List[Tuple[str, str, Dict]]:
         """
-        扫描目录，找到需要修复的嵌套结构
+        扫描目录，找到需要修复的嵌套结构 - 完全基于final脚本
 
         Args:
             directory: 要扫描的目录
-            recursive: 是否递归扫描子目录
 
         Returns:
             List[Tuple[str, str, Dict]]: [(目录路径, 文件路径, 文件信息), ...]
@@ -104,176 +187,322 @@ class WebDAVNestedFixer:
         nested_pairs = []
 
         try:
+            # 直接使用用户输入的路径，不进行转换
             directory = self._normalize_path(directory)
-            logger.debug(f"扫描目录: {directory}")
+            if self.verbose:
+                logger.info(f"扫描路径: {directory}")
 
-            # 应用速率限制
-            self._rate_limit_delay()
-
-            # 使用Alist API获取目录内容
-            response = await self.client._api_call(
-                'GET',
-                '/api/fs/list',
-                params={'path': directory, 'per_page': 0}
-            )
-
-            if not response.get('content'):
-                return nested_pairs
-
-            items = response['content']
+            items = self.client.ls(directory)
 
             for item in items:
-                item_name = item.get('name', '')
-                item_path = f"{directory.rstrip('/')}/{item_name}" if directory != '/' else f"/{item_name}"
-                is_dir = item.get('is_dir', False)
-                file_size = item.get('size', 0)
+                # 检查是否是目录
+                if isinstance(item, dict):
+                    is_dir = item.get('is_dir', False)
+                    item_path = item.get('href', '').replace('/dav', '').rstrip('/')  # 使用href并移除/dav前缀和尾部斜杠
+                    item_type = item.get('type', '')
+                    item_name = item.get('name', '')
+                    content_length = item.get('content_length', 0)
+                else:
+                    # 如果是对象，尝试获取属性
+                    is_dir = getattr(item, 'is_dir', False)
+                    item_path = getattr(item, 'href', '').replace('/dav', '').rstrip('/')
+                    item_type = getattr(item, 'type', '')
+                    item_name = getattr(item, 'name', '')
+                    content_length = getattr(item, 'content_length', 0)
 
                 # 调试信息
-                logger.debug(f"项目: {item_name}, 是否目录: {is_dir}, 大小: {file_size}")
+                if self.verbose:
+                    logger.info(f"项目: {item_name}, 类型: {item_type}, 是否目录: {is_dir}, 大小: {content_length}")
 
-                # 检查是否是错误的嵌套结构：类型是directory但size为0，且包含视频扩展名
+                # 改进的目录判断逻辑：使用多种方法判断是否为目录
+                # 1. 首先使用is_dir字段
+                # 2. 如果is_dir为False，检查type字段是否为'directory'
+                # 3. 如果还是不确定，使用WebDAV的is_dir方法检查
+                # 4. 最后，如果content_length为None，可能是目录
+                if not is_dir:
+                    if item_type == 'directory':
+                        is_dir = True
+                        if self.verbose:
+                            logger.info(f"  -> 根据type字段修正为目录")
+                    elif item_path and item_path != directory:
+                        try:
+                            is_dir = self.client.is_dir(item_path)
+                            if self.verbose and is_dir:
+                                logger.info(f"  -> 根据WebDAV检查修正为目录")
+                        except:
+                            # 如果检查失败，使用content_length判断
+                            if content_length is None:
+                                is_dir = True
+                                if self.verbose:
+                                    logger.info(f"  -> 根据content_length为None修正为目录")
+
+                # 检查是否是错误的嵌套结构：类型是directory但content_length为None，且包含视频扩展名
                 video_extensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v']
                 has_video_ext = any(ext in item_name.lower() for ext in video_extensions)
 
-                if is_dir and has_video_ext:
+                is_broken_nested = (item_type == 'directory' and content_length is None and has_video_ext)
+
+                if is_broken_nested:
                     # 这是包含视频扩展名的目录，需要检查其内部是否有文件
-                    logger.debug(f"检查可能的嵌套目录: {item_name}, 路径: {item_path}")
+                    if self.verbose:
+                        logger.debug(f"检查可能的嵌套目录: {item_name}, 路径: {item_path}")
 
+                    # 尝试列出目录内容
                     try:
-                        # 应用速率限制
-                        self._rate_limit_delay()
+                        sub_items = self.client.ls(item_path)
+                        if self.verbose:
+                            logger.debug(f"目录 {item_name} 下有 {len(sub_items)} 个项目")
 
-                        sub_response = await self.client._api_call(
-                            'GET',
-                            '/api/fs/list',
-                            params={'path': item_path, 'per_page': 0}
-                        )
-
-                        if sub_response.get('content'):
-                            logger.debug(f"目录 {item_name} 下有 {len(sub_response['content'])} 个项目")
-
-                            for sub_item in sub_response['content']:
+                        for sub_item in sub_items:
+                            # 检查子项是否是文件
+                            if isinstance(sub_item, dict):
+                                sub_is_dir = sub_item.get('is_dir', False)
+                                sub_item_path = sub_item.get('href', '').replace('/dav', '').rstrip('/')
+                                sub_item_size = sub_item.get('content_length', 0)
                                 sub_item_name = sub_item.get('name', '')
-                                sub_item_size = sub_item.get('size', 0)
-                                sub_item_path = f"{item_path.rstrip('/')}/{sub_item_name}"
+                            else:
+                                sub_is_dir = getattr(sub_item, 'is_dir', False)
+                                sub_item_path = getattr(sub_item, 'href', '').replace('/dav', '').rstrip('/')
+                                sub_item_size = getattr(sub_item, 'content_length', 0)
+                                sub_item_name = getattr(sub_item, 'name', '')
 
-                                # 检查是否是文件（size > 0）
-                                if sub_item_size > 0:
-                                    actual_filename = sub_item_name
-                                    logger.debug(f"  找到文件: {actual_filename}")
+                            # 更准确的文件判断：有content_length的是文件，或者类型是file
+                            is_file = (sub_item_size > 0) or (sub_item.get('type') == 'file')
 
-                                    nested_pairs.append((item_path, sub_item_path, {
-                                        'name': actual_filename,
-                                        'size': sub_item_size,
-                                        'modified': sub_item.get('modified_time')
-                                    }))
-                                    break
+                            if is_file:
+                                if self.verbose:
+                                    logger.debug(f"  找到文件: {sub_item_name}")
+                                nested_pairs.append((item_path, sub_item_path, {
+                                    'name': sub_item_name,
+                                    'size': sub_item_size,
+                                    'modified': sub_item.get('modified')
+                                }))
+                                break
 
                     except Exception as e:
                         logger.warning(f"无法读取目录 {item_path}: {str(e)}")
-                        continue
-
+                        # 如果无法读取，跳过这个目录
                 elif is_dir:
-                    # 普通目录，检查是否包含同名文件
+                    dir_path = item_path
+                    dir_name = self._basename(dir_path)
+
+                    # 调试信息
+                    if self.verbose:
+                        logger.info(f"检查目录: {dir_name} ({dir_path})")
+
+                    # 查找目录内的文件
                     try:
-                        # 应用速率限制
-                        self._rate_limit_delay()
+                        sub_items = self.client.ls(dir_path)
+                        if self.verbose:
+                            logger.debug(f"目录 {dir_name} 下有 {len(sub_items)} 个项目")
 
-                        sub_response = await self.client._api_call(
-                            'GET',
-                            '/api/fs/list',
-                            params={'path': item_path, 'per_page': 0}
-                        )
-
-                        if sub_response.get('content'):
-                            logger.debug(f"目录 {item_name} 下有 {len(sub_response['content'])} 个项目")
-
-                            for sub_item in sub_response['content']:
-                                sub_item_name = sub_item.get('name', '')
+                        for sub_item in sub_items:
+                            # 检查子项是否是文件
+                            if isinstance(sub_item, dict):
+                                sub_is_dir = sub_item.get('is_dir', False)
+                                sub_item_path = sub_item.get('path', '')
                                 sub_item_size = sub_item.get('size', 0)
-                                sub_item_path = f"{item_path.rstrip('/')}/{sub_item_name}"
+                                sub_item_modified = sub_item.get('modified', None)
+                                sub_item_type = sub_item.get('type', '')
+                            else:
+                                sub_is_dir = getattr(sub_item, 'is_dir', False)
+                                sub_item_path = getattr(sub_item, 'path', '')
+                                sub_item_size = getattr(sub_item, 'size', 0)
+                                sub_item_modified = getattr(sub_item, 'modified', None)
+                                sub_item_type = getattr(sub_item, 'type', '')
 
-                                if sub_item_size > 0:
-                                    file_name = sub_item_name
+                            # 更准确的文件判断：有content_length的是文件，或者类型是file
+                            is_file = (sub_item_size > 0) or (sub_item_type == 'file')
 
-                                    # 调试信息
+                            if is_file:
+                                file_path = sub_item_path
+                                file_name = self._basename(file_path)
+
+                                # 调试信息
+                                if self.verbose:
                                     logger.debug(f"  找到文件: {file_name}")
 
-                                    # 简化匹配逻辑：如果目录名包含视频扩展名，说明存在嵌套结构
-                                    video_extensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v']
-                                    has_video_ext = any(ext in item_name.lower() for ext in video_extensions)
+                                # 简化匹配逻辑：如果目录名包含视频扩展名，说明存在嵌套结构
+                                video_extensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v']
+                                has_video_ext = any(ext in dir_name.lower() for ext in video_extensions)
 
-                                    # 或者检查目录名是否与文件主体部分匹配
-                                    file_name_without_ext = file_name.rsplit('.', 1)[0] if '.' in file_name else file_name
-                                    name_match = (item_name in file_name_without_ext or
-                                                 file_name_without_ext in item_name)
+                                # 或者检查目录名是否与文件主体部分匹配
+                                file_name_without_ext = file_name.rsplit('.', 1)[0] if '.' in file_name else file_name
+                                name_match = (dir_name in file_name_without_ext or
+                                             file_name_without_ext in dir_name)
 
+                                if self.verbose:
                                     logger.debug(f"    匹配检查: ext={has_video_ext}, name={name_match}")
 
-                                    if has_video_ext or name_match:
+                                if has_video_ext or name_match:
+                                    if self.verbose:
                                         logger.debug(f"    ✓ 发现嵌套结构!")
 
-                                        nested_pairs.append((item_path, sub_item_path, {
-                                            'name': file_name,
-                                            'size': sub_item_size,
-                                            'modified': sub_item.get('modified_time')
-                                        }))
+                                    nested_pairs.append((dir_path, file_path, {
+                                        'name': file_name,
+                                        'size': sub_item_size,
+                                        'modified': sub_item_modified
+                                    }))
 
-                                        if self.verbose:
-                                            logger.debug(f"发现嵌套结构: {item_path} -> {sub_item_path}")
-                                        break
+                                    if self.verbose:
+                                        logger.debug(f"发现嵌套结构: {dir_path} -> {file_path}")
+                                    break
 
+  
                     except Exception as e:
-                        logger.warning(f"扫描子目录失败 {item_path}: {str(e)}")
-
-            # 如果启用递归扫描，遍历所有子目录
-            if recursive:
-                logger.debug(f"开始递归扫描 {directory} 的子目录...")
-                for item in items:
-                    item_name = item.get('name', '')
-                    item_path = f"{directory.rstrip('/')}/{item_name}" if directory != '/' else f"/{item_name}"
-                    is_dir = item.get('is_dir', False)
-
-                    if is_dir and item_path != directory:
-                        try:
-                            logger.debug(f"递归扫描子目录: {item_name}")
-                            sub_nested_pairs = await self.scan_nested_directories(item_path, recursive=True)
-                            nested_pairs.extend(sub_nested_pairs)
-                        except Exception as e:
-                            logger.warning(f"递归扫描失败 {item_path}: {str(e)}")
+                        logger.warning(f"扫描子目录失败 {dir_path}: {str(e)}")
 
         except Exception as e:
-            logger.error(f"扫描目录失败 {directory}: {str(e)}")
-            raise WebDAVOperationError(f"扫描失败: {str(e)}")
+            self._handle_webdav_error(e, "scan_nested_directories", directory)
 
         return nested_pairs
 
-    async def file_exists(self, path: str) -> bool:
-        """检查文件是否存在"""
+    async def get_all_directories(self, directory: str) -> List[str]:
+        """
+        递归获取指定目录下的所有子目录
+
+        Args:
+            directory: 要扫描的根目录
+
+        Returns:
+            List[str]: 所有子目录的路径列表
+        """
+        all_dirs = []
+
         try:
-            await self.client._api_call('GET', '/api/fs/stat', params={'path': path})
-            logger.debug(f"检查文件是否存在 {path}: True")
-            return True
+            directory = self._normalize_path(directory)
+
+            # 获取当前目录下的所有项目
+            items = self.client.ls(directory)
+
+            for item in items:
+                # 获取项目信息
+                if isinstance(item, dict):
+                    item_path = item.get('href', '').replace('/dav', '').rstrip('/')
+                    item_type = item.get('type', '')
+                else:
+                    item_path = getattr(item, 'href', '').replace('/dav', '').rstrip('/')
+                    item_type = getattr(item, 'type', '')
+
+                # 判断是否为目录
+                is_dir = False
+                if item_type == 'directory':
+                    is_dir = True
+                elif item_path and item_path != directory:
+                    try:
+                        is_dir = self.client.is_dir(item_path)
+                    except:
+                        pass
+
+                if is_dir and item_path and item_path != directory:
+                    all_dirs.append(item_path)
+                    if self.verbose:
+                        logger.info(f"找到子目录: {item_path}")
+
+                    # 递归获取子目录下的所有目录
+                    sub_dirs = await self.get_all_directories(item_path)
+                    all_dirs.extend(sub_dirs)
 
         except Exception as e:
-            logger.debug(f"检查文件存在性失败 {path}: {str(e)}")
+            logger.warning(f"获取目录列表失败 {directory}: {str(e)}")
+
+        return all_dirs
+
+    async def file_exists(self, path: str) -> bool:
+        """
+        检查文件是否存在 - 基于final脚本
+
+        Args:
+            path: 文件路径
+
+        Returns:
+            bool: 文件是否存在
+        """
+        try:
+            result = self.client.exists(path)
+            if self.verbose:
+                logger.debug(f"检查文件是否存在 {path}: {result}")
+            return result
+
+        except ClientError as e:
+            self._handle_webdav_error(e, "file_exists", path)
+        except Exception as e:
+            logger.warning(f"检查文件存在性失败 {path}: {str(e)}")
             return False
 
     async def is_directory(self, path: str) -> bool:
-        """检查路径是否是目录"""
-        try:
-            response = await self.client._api_call('GET', '/api/fs/stat', params={'path': path})
-            is_dir = response.get('is_dir', False)
-            logger.debug(f"检查是否是目录 {path}: {is_dir}")
-            return is_dir
+        """
+        检查路径是否是目录 - 基于final脚本
 
+        Args:
+            path: 路径
+
+        Returns:
+            bool: 是否是目录
+        """
+        try:
+            result = self.client.is_dir(path)
+            if self.verbose:
+                logger.debug(f"检查是否是目录 {path}: {result}")
+            return result
+
+        except ClientError as e:
+            self._handle_webdav_error(e, "is_directory", path)
         except Exception as e:
             logger.warning(f"检查是否是目录失败 {path}: {str(e)}")
             return False
 
+    async def get_file_size(self, path: str) -> int:
+        """
+        获取文件大小 - 基于final脚本
+
+        Args:
+            path: 文件路径
+
+        Returns:
+            int: 文件大小（字节）
+        """
+        try:
+            size = self.client.content_length(path)
+            if self.verbose:
+                logger.debug(f"获取文件大小 {path}: {size}")
+            return size
+
+        except ClientError as e:
+            self._handle_webdav_error(e, "get_file_size", path)
+        except Exception as e:
+            logger.warning(f"获取文件大小失败 {path}: {str(e)}")
+            return 0
+
+    async def rename(self, old_path: str, new_path: str) -> bool:
+        """
+        重命名文件或目录 - 基于final脚本
+
+        Args:
+            old_path: 原路径
+            new_path: 新路径
+
+        Returns:
+            bool: 操作是否成功
+        """
+        try:
+            # 直接使用原始路径 - 基于final脚本
+            if self.verbose:
+                logger.info(f"WebDAV重命名: {old_path} -> {new_path}")
+
+            self.client.move(from_path=old_path, to_path=new_path, overwrite=True)
+            logger.info(f"重命名: {old_path} -> {new_path}")
+            return True
+
+        except ClientError as e:
+            self._handle_webdav_error(e, "rename", f"{old_path} -> {new_path}")
+        except Exception as e:
+            logger.error(f"重命名失败: {old_path} -> {new_path}: {str(e)}")
+            return False
+
     async def move_file(self, source_path: str, target_path: str) -> bool:
         """
-        移动文件
+        移动文件 - 基于final脚本
 
         Args:
             source_path: 源路径
@@ -283,34 +512,23 @@ class WebDAVNestedFixer:
             bool: 操作是否成功
         """
         try:
+            # 直接使用原始路径 - 基于final脚本
             if self.verbose:
-                logger.info(f"Alist移动: {source_path} -> {target_path}")
+                logger.info(f"WebDAV移动: {source_path} -> {target_path}")
 
-            # 应用速率限制
-            self._rate_limit_delay()
-
-            # 使用Alist的rename/移动API
-            await self.client._api_call(
-                'POST',
-                '/api/fs/move',
-                json={
-                    'src_dir': self._basename(source_path).rsplit('.', 1)[0] if '.' in self._basename(source_path) else self._basename(source_path),
-                    'dst_dir': self._basename(target_path).rsplit('.', 1)[0] if '.' in self._basename(target_path) else self._basename(target_path),
-                    'src_dir_path': source_path.rsplit('/', 1)[0],
-                    'dst_dir_path': target_path.rsplit('/', 1)[0]
-                }
-            )
-
+            self.client.move(from_path=source_path, to_path=target_path, overwrite=True)
             logger.info(f"移动文件: {source_path} -> {target_path}")
             return True
 
+        except ClientError as e:
+            self._handle_webdav_error(e, "move_file", f"{source_path} -> {target_path}")
         except Exception as e:
             logger.error(f"移动文件失败: {source_path} -> {target_path}: {str(e)}")
             return False
 
     async def delete(self, path: str) -> bool:
         """
-        删除文件或目录
+        删除文件或目录 - 基于final脚本
 
         Args:
             path: 路径
@@ -319,22 +537,27 @@ class WebDAVNestedFixer:
             bool: 操作是否成功
         """
         try:
-            # 应用速率限制
-            self._rate_limit_delay()
+            # 直接使用原始路径 - 基于final脚本
+            if self.verbose:
+                logger.info(f"WebDAV删除: {path}")
 
-            # 使用Alist删除API
-            await self.client._api_call(
-                'POST',
-                '/api/fs/remove',
-                json={
-                    'names': [self._basename(path)],
-                    'dir': path.rsplit('/', 1)[0]
-                }
-            )
+            # 尝试删除为目录
+            try:
+                self.client.remove(path)
+                logger.info(f"删除目录: {path}")
+                return True
+            except ClientError:
+                # 如果删除目录失败，尝试删除为文件
+                try:
+                    self.client.remove(path)
+                    logger.info(f"删除文件: {path}")
+                    return True
+                except ClientError as e:
+                    logger.error(f"删除失败: {path}")
+                    raise e
 
-            logger.info(f"删除: {path}")
-            return True
-
+        except ClientError as e:
+            self._handle_webdav_error(e, "delete", path)
         except Exception as e:
             logger.error(f"删除失败: {path}: {str(e)}")
             return False
@@ -342,7 +565,7 @@ class WebDAVNestedFixer:
     async def fix_nested_structure(self, target_dir: str = ".", dry_run: bool = True,
                                    handle_conflicts: str = "skip", recursive: bool = False) -> Dict:
         """
-        修复嵌套目录结构
+        修复嵌套目录结构 - 完全基于final脚本
 
         Args:
             target_dir: 要处理的目标目录路径
@@ -364,21 +587,41 @@ class WebDAVNestedFixer:
         }
 
         try:
-            # 扫描需要修复的目录
-            mode_text = "递归" if recursive else "当前"
-            logger.info(f"开始{mode_text}扫描嵌套目录结构... {target_dir}")
+            logger.info(f"开始扫描嵌套目录结构... {target_dir}")
 
-            nested_pairs = await self.scan_nested_directories(target_dir, recursive=recursive)
-            result['total_found'] = len(nested_pairs)
+            # 确定要扫描的目录列表
+            if recursive:
+                # 递归模式：只扫描子目录，不扫描父目录
+                if self.verbose:
+                    logger.info("递归扫描模式下，获取所有子目录...")
 
-            if not nested_pairs:
+                directories_to_scan = await self.get_all_directories(target_dir)
+
+                if self.verbose:
+                    logger.info(f"找到 {len(directories_to_scan)} 个子目录需要扫描")
+            else:
+                # 非递归模式：只扫描指定目录
+                directories_to_scan = [target_dir]
+
+            # 扫描所有目录中的嵌套结构
+            all_nested_pairs = []
+            for directory in directories_to_scan:
+                if self.verbose:
+                    logger.info(f"扫描目录: {directory}")
+
+                nested_pairs = await self.scan_nested_directories(directory)
+                all_nested_pairs.extend(nested_pairs)
+
+            result['total_found'] = len(all_nested_pairs)
+
+            if not all_nested_pairs:
                 logger.info("未发现需要修复的嵌套目录结构")
                 return result
 
-            logger.info(f"发现 {len(nested_pairs)} 个需要修复的嵌套目录:")
+            logger.info(f"发现 {len(all_nested_pairs)} 个需要修复的嵌套目录:")
 
             # 显示找到的嵌套结构
-            for i, (dir_path, file_path, file_info) in enumerate(nested_pairs, 1):
+            for i, (dir_path, file_path, file_info) in enumerate(all_nested_pairs, 1):
                 dir_name = self._basename(dir_path)
                 file_name = file_info['name']
                 file_size = file_info['size'] / (1024 * 1024)  # MB
@@ -392,26 +635,18 @@ class WebDAVNestedFixer:
                 logger.info("使用 --force 参数执行实际操作")
                 return result
 
-            # 执行修复操作
-            for dir_path, file_path, file_info in nested_pairs:
+            # 执行修复操作 - 基于final脚本
+            for dir_path, file_path, file_info in all_nested_pairs:
                 try:
                     dir_name = self._basename(dir_path)
                     file_name = file_info['name']
                     file_size = file_info['size']
 
-                    # 提取 dir_path 的父目录作为目标目录
-                    import os.path as path_os
-                    parent_dir = path_os.dirname(dir_path.rstrip('/'))
-                    if parent_dir == '':
-                        parent_dir = '/'
-
-                    # 构建正确的目标路径
-                    target_path = f"{parent_dir.rstrip('/')}/{file_name}" if parent_dir != '/' else f"/{file_name}"
-
-                    if self.verbose:
-                        logger.info(f"调试: dir_path = {dir_path}")
-                        logger.info(f"调试: 提取的父目录 = {parent_dir}")
-                        logger.info(f"调试: 构建的目标路径 = {target_path}")
+                    # 目标路径应该是嵌套问题所在的目录 + 文件名
+                    # 这样每个子目录的修复任务都是独立的
+                    parent_dir = self._normalize_path(dir_path).rstrip('/').rsplit('/', 1)[0] if '/' in self._normalize_path(dir_path).rstrip('/') else '/'
+                    pure_file_name = self._basename(file_path)
+                    target_path = f"{parent_dir}/{pure_file_name}" if parent_dir != '/' else f"/{pure_file_name}"
 
                     detail = {
                         'directory': dir_name,
@@ -422,9 +657,11 @@ class WebDAVNestedFixer:
                     }
 
                     if self.verbose:
-                        logger.info(f"处理: {dir_name} -> {file_name}")
+                        logger.info(f"处理嵌套问题: {dir_path}")
+                        logger.info(f"  -> 目标父目录: {parent_dir}")
+                        logger.info(f"  -> 目标文件: {target_path}")
 
-                    # 检查目标文件是否已存在
+                    # 检查目标文件是否已存在，排除目录的情况
                     if await self.file_exists(target_path) and not await self.is_directory(target_path):
                         if self.verbose:
                             logger.info(f"目标文件已存在: {file_name}")
@@ -463,41 +700,35 @@ class WebDAVNestedFixer:
                             if self.verbose:
                                 logger.info(f"覆盖: {file_name}")
 
-                    # 执行修复：重命名目录，移动文件，删除目录
+                    # 实现真正的嵌套目录修复：将文件移出，删除目录
+                    # 策略：先重命名目录，避免冲突 - 基于final脚本
+                    # 临时目录也创建在嵌套问题所在的目录，保持独立性
                     temp_dir_name = f"temp_{dir_name}_{hash(dir_path) % 1000}"
-                    temp_dir_path = f"{target_dir.rstrip('/')}/{temp_dir_name}" if target_dir != '/' else f"/{temp_dir_name}"
+                    parent_dir = self._normalize_path(dir_path).rstrip('/').rsplit('/', 1)[0] if '/' in self._normalize_path(dir_path).rstrip('/') else '/'
+                    temp_dir_path = f"{parent_dir}/{temp_dir_name}" if parent_dir != '/' else f"/{temp_dir_name}"
 
                     if self.verbose:
-                        logger.info(f"重命名目录: {dir_name} -> {temp_dir_name}")
+                        logger.info(f"重命名目录: {dir_path} -> {temp_dir_path}")
 
-                    # 重命名目录
-                    await self.client._api_call(
-                        'POST',
-                        '/api/fs/rename',
-                        json={
-                            'name': dir_name,
-                            'new_name': temp_dir_name,
-                            'path': dir_path.rsplit('/', 1)[0]
-                        }
-                    )
+                    if not await self.rename(dir_path, temp_dir_path):
+                        raise Exception(f"重命名目录失败: {dir_name}")
 
                     # 移动文件到目标位置
                     if self.verbose:
                         logger.info(f"移动: {file_name}")
 
-                    source_file_path = f"{temp_dir_path.rstrip('/')}/{file_name}"
+                    # 构造源文件路径（在临时目录中）
+                    # 使用纯文件名，不包含路径
+                    pure_file_name = self._basename(file_path)
+                    source_file_path = f"{temp_dir_path.rstrip('/')}/{pure_file_name}"
+
+                    if self.verbose:
+                        logger.info(f"源文件路径: {source_file_path}")
+                        logger.info(f"目标路径: {target_path}")
 
                     if not await self.move_file(source_file_path, target_path):
                         # 恢复目录名称
-                        await self.client._api_call(
-                            'POST',
-                            '/api/fs/rename',
-                            json={
-                                'name': temp_dir_name,
-                                'new_name': dir_name,
-                                'path': temp_dir_path.rsplit('/', 1)[0]
-                            }
-                        )
+                        await self.rename(temp_dir_path, dir_path)
                         raise Exception(f"移动文件失败: {file_name}")
 
                     # 删除临时目录
@@ -523,8 +754,14 @@ class WebDAVNestedFixer:
                     if self.verbose:
                         logger.error(f"ERROR 失败: {file_name} - {str(e)}")
 
-                    detail['status'] = 'error'
-                    detail['message'] = error_msg
+                    # 添加错误详情
+                    detail = {
+                        'directory': dir_name,
+                        'file': file_name,
+                        'size_mb': round(file_size / (1024 * 1024), 2),
+                        'status': 'error',
+                        'message': error_msg
+                    }
                     result['details'].append(detail)
 
                 except Exception as e:
@@ -535,8 +772,14 @@ class WebDAVNestedFixer:
                     if self.verbose:
                         logger.error(f"ERROR 失败: {file_name} - {str(e)}")
 
-                    detail['status'] = 'error'
-                    detail['message'] = error_msg
+                    # 添加错误详情
+                    detail = {
+                        'directory': dir_name,
+                        'file': file_name,
+                        'size_mb': round(file_size / (1024 * 1024), 2),
+                        'status': 'error',
+                        'message': error_msg
+                    }
                     result['details'].append(detail)
 
         except Exception as e:
