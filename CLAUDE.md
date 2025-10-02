@@ -163,17 +163,5 @@ Configured through loguru with:
 
 The project supports containerized deployment with Docker configuration in the `docker/` directory.
 
-修复指令：
-  # 查看帮助
-  uv run alist-mikananirss webdav-fix --help
-
-  # 预览模式（不实际执行）
-  uv run alist-mikananirss webdav-fix --dir "/115/TV/2025-07" --verbose
-
-  # 实际执行修复
-  uv run alist-mikananirss webdav-fix --dir "/115/TV/2025-07" --force --verbose
-
-  # 递归扫描
-  uv run alist-mikananirss webdav-fix --dir "/115/TV" --recursive --force
   
  always answer in chinese

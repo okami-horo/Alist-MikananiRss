@@ -55,3 +55,16 @@ Docker，源码运行等更多的运行方法详见[使用文档](https://github
 <div align=center>
 <img src="https://github.com/TwooSix/Alist-MikananiRss/blob/master/imgs/show_pic1.png"/>
 </div>
+
+修复指令：
+  # 查看帮助
+  uv run alist-mikananirss webdav-fix --help
+
+  # 预览模式（不实际执行）
+  uv run alist-mikananirss webdav-fix --dir "/115/TV/2025-07" --verbose
+
+  # 实际执行修复
+  uv run alist-mikananirss webdav-fix --dir "/115/TV/胆大党 第二季" --force --verbose
+
+  # 递归扫描
+  uv run alist-mikananirss webdav-fix --dir "/115/TV/2025-07/" --recursive --force

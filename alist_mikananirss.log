@@ -1,0 +1,45 @@
+2025-10-02 00:50:23.276 | INFO     | alist_mikananirss.main:run:174 - Loaded config Successfully
+2025-10-02 00:50:23.280 | INFO     | alist_mikananirss.main:run:175 - Config: 
+common:
+  interval_time: 21600
+  proxies: {}
+alist:
+  base_url: http://192.168.31.37:5244/
+  token: alist-d3addd10-34d1-442f-a823-76d14c80915aPgOizrOj54rqOwFfq716fYk7Jo0kBBtd3IKFaPpsl1OZhHqqyu9mAgdrPGwLBv9R
+  downloader: 115 Cloud
+  download_path: 115/TV
+  convert_torrent_to_magnet: true
+mikan:
+  subscribe_url:
+  - https://mikanani.kas.pub/RSS/MyBangumi?token=oxMwDoouV18rOBaL3bqjmoi3alE5UjdMuhgqgTTp5Hc%3d
+  regex_pattern:
+    简体: (简体|简中|简日|CHS)
+    繁体: (繁体|繁中|繁日|CHT|Baha)
+    1080p: (X1080|1080P)
+    非合集: ^(?!.*(\d{2}-\d{2}|合集)).*
+  filters: []
+notification:
+  enable: false
+  interval_time: 300
+  bots: []
+rename:
+  enable: false
+  extractor:
+    extractor_type: openai
+    api_key: 0d38fadd5764430ea08742b7bbccb8eb.hOmKt0tOeomD1qTH
+    base_url: https://open.bigmodel.cn/api/paas/v4/
+    model: glm-4-flash
+    output_type: json_object
+  rename_format: '{name} S{season:02d}E{episode:02d}'
+  remap:
+    enable: false
+    cfg_path: remap.yaml
+bot_assistant:
+  enable: false
+  bots: []
+dev:
+  log_level: INFO
+
+2025-10-02 00:50:23.293 | INFO     | alist_mikananirss.core.rss_monitor:run:108 - Start update checking
+2025-10-02 00:50:24.400 | INFO     | alist_mikananirss.core.rss_monitor:get_new_resources:88 - Converting torrent files to magnet links in RSS monitor...
+2025-10-02 00:50:24.400 | INFO     | alist_mikananirss.core.rss_monitor:run:111 - No new resources

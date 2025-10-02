@@ -9,7 +9,10 @@
       "Read(//usr/bin/**)",
       "Bash(python3:*)",
       "Bash(./.venv/bin/python:*)",
-      "Bash(uv:*)"
+      "Bash(uv:*)",
+      "Bash(git checkout:*)",
+      "Bash(cat:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []
