@@ -63,64 +63,109 @@ class WebDAVNestedFixer:
             # 默认值
             self.url = "http://127.0.0.1:5244/dav"
 
-        # 获取WebDAV认证信息
-        webdav_config = self._load_webdav_config()
+        # 获取配置信息
+        config = self._load_config()
+        webdav_config = config.get('webdav', {})
+        fixer_config = config.get('fixer_config', {})
+        download_path = config.get('download_path')
 
-        if webdav_config:
-            # 从配置文件读取
-            self.url = webdav_config.get('url', self.url)
-            self.username = webdav_config.get('username', 'admin')
-            self.password = webdav_config.get('password', '')
-            logger.info(f"从配置文件加载WebDAV认证信息: {self.username}@{self.url}")
-        else:
-            # 使用直接传入的参数
-            if username is None:
-                self.username = "admin"
-            else:
-                self.username = username
+        # 保存配置到实例
+        self.download_path = download_path
+        self.execute_mode = fixer_config.get('execute_mode', False)
+        self.recursive_scan = fixer_config.get('recursive_scan', True)
+        self.conflict_strategy = fixer_config.get('conflict_strategy', 'skip')
 
-            if password is None:
-                self.password = ""
-            else:
-                self.password = password
+        if webdav_config.get('url'):
+            self.url = webdav_config.get('url')
+        self.username = webdav_config.get('username', 'admin')
+        self.password = webdav_config.get('password', '')
 
-            logger.info(f"使用传入的WebDAV认证信息: {self.username}@{self.url}")
+        logger.info(f"从配置文件加载WebDAV认证信息: {self.username}@{self.url}")
+        if self.download_path:
+            logger.info(f"使用download_path作为默认处理路径: {self.download_path}")
+        logger.info(f"修复工具配置: execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
 
         # 创建WebDAV客户端 - 基于final脚本
         self.client = Client(
             base_url=self.url,
-            auth=(self.username, self.password)
+            auth=(self.username, self.password),
+            timeout=20.0  # 设置20秒超时，适配115云的慢响应
         )
 
         # 测试连接 - 异步版本
         asyncio.create_task(self._test_connection())
 
-    def _load_webdav_config(self) -> Optional[Dict]:
+    def _load_config(self) -> Dict:
         """
-        加载WebDAV配置文件
+        加载配置文件（包括config.yaml和webdav_config.yaml）
 
         Returns:
-            Dict or None: 配置信息或None
+            Dict: 配置信息
         """
-        config_paths = [
+        config = {
+            'webdav': {},
+            'download_path': None,
+            'fixer_config': {}
+        }
+
+        # 加载config.yaml获取download_path
+        main_config_paths = [
+            'config.yaml',
+            'config/config.yaml',
+            '/workspace/Alist-MikananiRss/config.yaml'
+        ]
+
+        for config_path in main_config_paths:
+            if os.path.exists(config_path):
+                try:
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        main_config = yaml.safe_load(f)
+                        alist_config = main_config.get('alist', {})
+                        download_path = alist_config.get('download_path')
+                        if download_path:
+                            config['download_path'] = download_path
+                            logger.info(f"从config.yaml加载download_path: {download_path}")
+                            break
+                except Exception as e:
+                    logger.warning(f"读取config.yaml失败 {config_path}: {str(e)}")
+                    continue
+
+        # 加载webdav_config.yaml
+        webdav_config_paths = [
             'webdav_config.yaml',
             'config/webdav_config.yaml',
             '/workspace/Alist-MikananiRss/webdav_config.yaml'
         ]
 
-        for config_path in config_paths:
+        for config_path in webdav_config_paths:
             if os.path.exists(config_path):
                 try:
                     with open(config_path, 'r', encoding='utf-8') as f:
-                        config = yaml.safe_load(f)
-                        webdav_config = config.get('webdav')
-                        if webdav_config:
-                            return webdav_config
+                        webdav_full_config = yaml.safe_load(f)
+                        webdav_config = webdav_full_config.get('webdav', {})
+
+                        # 提取基本WebDAV配置
+                        config['webdav'] = {
+                            'url': webdav_config.get('url'),
+                            'username': webdav_config.get('username'),
+                            'password': webdav_config.get('password')
+                        }
+
+                        # 提取fixer配置
+                        fixer_config = webdav_config.get('fixer', {})
+                        config['fixer_config'] = {
+                            'execute_mode': fixer_config.get('execute_mode', False),
+                            'recursive_scan': fixer_config.get('recursive_scan', True),
+                            'conflict_strategy': fixer_config.get('conflict_strategy', 'skip')
+                        }
+
+                        logger.info(f"从webdav_config.yaml加载配置: execute_mode={config['fixer_config']['execute_mode']}, recursive_scan={config['fixer_config']['recursive_scan']}")
+                        return config
                 except Exception as e:
                     logger.warning(f"读取WebDAV配置文件失败 {config_path}: {str(e)}")
                     continue
 
-        return None
+        return config
 
     async def _test_connection(self):
         """测试WebDAV连接 - 基于final脚本"""
@@ -562,20 +607,37 @@ class WebDAVNestedFixer:
             logger.error(f"删除失败: {path}: {str(e)}")
             return False
 
-    async def fix_nested_structure(self, target_dir: str = ".", dry_run: bool = True,
-                                   handle_conflicts: str = "skip", recursive: bool = False) -> Dict:
+    async def fix_nested_structure(self, target_dir: str = None, dry_run: bool = None,
+                                   handle_conflicts: str = None, recursive: bool = None) -> Dict:
         """
         修复嵌套目录结构 - 完全基于final脚本
 
         Args:
-            target_dir: 要处理的目标目录路径
-            dry_run: 如果为True，只显示将要执行的操作，不实际执行
-            handle_conflicts: 冲突处理策略 ("skip", "rename", "overwrite")
-            recursive: 是否递归扫描子目录
+            target_dir: 要处理的目标目录路径，如果为None则使用配置中的download_path
+            dry_run: 如果为True，只显示将要执行的操作，不实际执行，如果为None则使用配置中的execute_mode
+            handle_conflicts: 冲突处理策略 ("skip", "rename", "overwrite")，如果为None则使用配置中的conflict_strategy
+            recursive: 是否递归扫描子目录，如果为None则使用配置中的recursive_scan
 
         Returns:
             Dict: 操作结果
         """
+        # 使用配置中的默认值
+        if target_dir is None:
+            target_dir = self.download_path or "."
+            if self.download_path:
+                logger.info(f"使用配置中的download_path: {target_dir}")
+
+        if dry_run is None:
+            dry_run = not self.execute_mode  # execute_mode=True意味着dry_run=False
+            logger.info(f"使用配置中的execute_mode: {'实际执行' if not dry_run else '预览模式'}")
+
+        if handle_conflicts is None:
+            handle_conflicts = self.conflict_strategy
+            logger.info(f"使用配置中的conflict_strategy: {handle_conflicts}")
+
+        if recursive is None:
+            recursive = self.recursive_scan
+            logger.info(f"使用配置中的recursive_scan: {recursive}")
         result = {
             'success': True,
             'total_found': 0,

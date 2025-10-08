@@ -26,6 +26,7 @@ class AlistDownloaderType(Enum):
     ARIA = "aria2"
     QBIT = "qBittorrent"
     CLOUD_115 = "115 Cloud"
+    OPEN_115 = "115 Open"
 
 
 class AlistDeletePolicy(Enum):
