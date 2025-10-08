@@ -11,7 +11,9 @@ webdav:
   url: "http://192.168.31.37:5244/dav" # WebDAV服务器URL（通常是Alist地址 + /dav）
   username: "admin" # WebDAV用户名
   password: "your_password" # WebDAV密码，请修改为您的实际密码
+  timeout: 60 # WebDAV请求超时时间（秒），对于115云等慢响应服务建议设置为60-120秒
   fixer:
+    enable: false # 是否启用WebDAV修复工具（需要设置为true才能使用）
     execute_mode: false # 是否实际执行修复操作（false=仅预览，true=实际执行）
     recursive_scan: true # 是否递归扫描子目录
     conflict_strategy: "skip" # 冲突处理策略: "skip"(跳过), "rename"(重命名), "overwrite"(覆盖)

@@ -63,6 +63,13 @@ class WebDAVNestedFixer:
         self.username = username or 'admin'
         self.password = password or ''
 
+        # 获取timeout配置
+        self.timeout = 60  # 默认60秒
+        if config and hasattr(config, 'webdav') and hasattr(config.webdav, 'timeout'):
+            self.timeout = config.webdav.timeout
+        elif config:
+            logger.debug("配置对象中未找到timeout设置，使用默认值")
+
         # 从配置或alist_client获取download_path
         self.download_path = None
         if config:
@@ -80,29 +87,32 @@ class WebDAVNestedFixer:
         # 获取WebDAV修复工具配置
         if config:
             # 使用传入的配置对象
+            self.enable = config.webdav.fixer.enable
             self.execute_mode = config.webdav.fixer.execute_mode
             self.recursive_scan = config.webdav.fixer.recursive_scan
             self.conflict_strategy = config.webdav.fixer.conflict_strategy
-            logger.info(f"成功加载WebDAV修复工具配置: execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
+            logger.info(f"成功加载WebDAV修复工具配置: enable={self.enable}, execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
         else:
             # 尝试从ConfigManager获取配置
             try:
                 from alist_mikananirss.common.config import ConfigManager
                 cfg_manager = ConfigManager()
                 cfg = cfg_manager.get_config()
+                self.enable = cfg.webdav.fixer.enable
                 self.execute_mode = cfg.webdav.fixer.execute_mode
                 self.recursive_scan = cfg.webdav.fixer.recursive_scan
                 self.conflict_strategy = cfg.webdav.fixer.conflict_strategy
-                logger.info(f"成功加载WebDAV修复工具配置: execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
+                logger.info(f"成功加载WebDAV修复工具配置: enable={self.enable}, execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
             except Exception as e:
                 # 使用配置模型中的默认值
                 from alist_mikananirss.common.config.basic import WebdavFixerConfig
                 default_config = WebdavFixerConfig()
+                self.enable = default_config.enable
                 self.execute_mode = default_config.execute_mode
                 self.recursive_scan = default_config.recursive_scan
                 self.conflict_strategy = default_config.conflict_strategy
                 logger.warning(f"加载WebDAV修复工具配置失败，使用默认配置: {str(e)}")
-                logger.info(f"使用默认配置: execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
+                logger.info(f"使用默认配置: enable={self.enable}, execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
 
         logger.info(f"WebDAV认证信息: {self.username}@{self.url}")
         if self.download_path:
@@ -113,8 +123,9 @@ class WebDAVNestedFixer:
         self.client = Client(
             base_url=self.url,
             auth=(self.username, self.password),
-            timeout=20.0  # 设置20秒超时，适配115云的慢响应
+            timeout=float(self.timeout)  # 使用配置的超时时间，默认60秒
         )
+        logger.info(f"WebDAV客户端超时设置: {self.timeout}秒")
 
         # 连接测试将在第一次使用时进行
         self._connection_tested = False
