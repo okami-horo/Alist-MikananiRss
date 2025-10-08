@@ -138,6 +138,49 @@ class TaskMonitor:
         logger.debug(f"Linked [{download_task.url}] to {matched_tf_task.uuid}")
         return matched_tf_task
 
+    def _find_transfer_task_optimized(
+        self, download_task: AlistDownloadTask, all_transfer_tasks: list[AlistTransferTask]
+    ) -> Optional[AlistTransferTask]:
+        """Optimized version of _find_transfer_task that uses pre-fetched transfer task list
+
+        Args:
+            download_task (AlistDownloadTask): The download task to find the transfer task for
+            all_transfer_tasks (list[AlistTransferTask]): Pre-fetched list of all transfer tasks
+
+        Returns:
+            Optional[AlistTransferTask]: The transfer task if found, None otherwise
+        """
+        # Filter out the transfer tasks by start_time and state
+        transfer_task_list = [
+            task
+            for task in all_transfer_tasks
+            if (
+                # 1. The transfer task is not already linked
+                task.uuid not in self.uuid_set
+                # 2. It's a video file
+                and utils.is_video(task.target_path)
+                # 3. It's created after the download task
+                and task.start_time > download_task.start_time
+                # 4. The transfer task is in a valid state
+                and task.state
+                in [
+                    AlistTaskState.Pending,
+                    AlistTaskState.Running,
+                    AlistTaskState.Succeeded,
+                ]
+                # 5. Same anime, same season (looser matching)
+                and download_task.download_path in task.target_path
+            )
+        ]
+        if len(transfer_task_list) == 0:
+            return None
+        # Sort by start time, the latest one first
+        transfer_task_list.sort(key=lambda x: x.start_time, reverse=True)
+        matched_tf_task = transfer_task_list[0]
+        self.uuid_set.add(matched_tf_task.uuid)
+        logger.debug(f"Linked [{download_task.url}] to {matched_tf_task.uuid}")
+        return matched_tf_task
+
     async def _post_process(self, task: AlistTask, resource: ResourceInfo):
         "Something to do after download task success"
         logger.info(f"Download {resource.resource_title} success")
@@ -162,21 +205,38 @@ class TaskMonitor:
         Args:
             task_list (list[AlistTask]): The task list to process
         """
-        for task in task_list:
-            if task.task_type == AlistTaskType.DOWNLOAD:
-                tf_task = await self._find_transfer_task(task)
-                if tf_task is None:
-                    # No transfer task found, assume direct download (e.g., 115 Cloud internal storage)
+        # Batch fetch transfer tasks to reduce API calls
+        download_tasks = [task for task in task_list if task.task_type == AlistTaskType.DOWNLOAD]
+        transfer_tasks = [task for task in task_list if task.task_type == AlistTaskType.TRANSFER]
+
+        # Process transfer tasks directly
+        for task in transfer_tasks:
+            resource = self.task_resource_map[task]
+            await self._post_process(task, resource)
+
+        # Batch process download tasks
+        if download_tasks:
+            try:
+                # Single API call for all download tasks
+                all_transfer_tasks = await self.alist_client.get_task_list(AlistTaskType.TRANSFER)
+
+                for task in download_tasks:
+                    tf_task = self._find_transfer_task_optimized(task, all_transfer_tasks)
+                    if tf_task is None:
+                        # No transfer task found, assume direct download (e.g., 115 Cloud internal storage)
+                        resource = self.task_resource_map[task]
+                        logger.info(f"No transfer task needed for [{resource.resource_title}], processing directly")
+                        await self._post_process(task, resource)
+                    else:
+                        # Transfer task found, monitor it for completion
+                        self.running_tasks.append(tf_task)
+                        self.task_resource_map[tf_task] = self.task_resource_map[task]
+            except Exception as e:
+                logger.error(f"Error when batch processing transfer tasks: {e}")
+                # Fallback to individual processing
+                for task in download_tasks:
                     resource = self.task_resource_map[task]
-                    logger.info(f"No transfer task needed for [{resource.resource_title}], processing directly")
                     await self._post_process(task, resource)
-                else:
-                    # Transfer task found, monitor it for completion
-                    self.running_tasks.append(tf_task)
-                    self.task_resource_map[tf_task] = self.task_resource_map[task]
-            elif task.task_type == AlistTaskType.TRANSFER:
-                resource = self.task_resource_map[task]
-                await self._post_process(task, resource)
 
     async def _process_failed_tasks(self, task_list: list[AlistTask]):
         """Process the failed tasks
@@ -210,13 +270,28 @@ class TaskMonitor:
                 self.coroutine = asyncio.create_task(self.run())
 
     async def run(self):
+        initial_task_count = len(self.running_tasks)
+        logger.debug(f"Task monitor started with {initial_task_count} running task(s)")
+
+        # Adaptive polling interval
+        poll_interval = 0.5  # Start with 0.5 seconds for faster response
+        consecutive_empty_checks = 0
+
         while len(self.running_tasks) > 0:
             # 1. Get remote task list
             async with self.lock:
                 new_task_list = await self._fetch_remote_tasks()
                 if not new_task_list:
-                    await asyncio.sleep(1)
+                    consecutive_empty_checks += 1
+                    # Increase poll interval if we keep getting empty results
+                    if consecutive_empty_checks > 3:
+                        poll_interval = min(poll_interval * 1.5, 3.0)  # Max 3 seconds
+                    await asyncio.sleep(poll_interval)
                     continue
+
+                consecutive_empty_checks = 0
+                # Reset poll interval when we get data
+                poll_interval = 0.5
 
                 # 2. Update running tasks state
                 self._refresh_task(self.running_tasks, new_task_list)
@@ -230,17 +305,28 @@ class TaskMonitor:
                     elif task.state not in self.NORMAL_STATUS:
                         failed_task.append(task)
 
+                # 4. update running tasks and log before processing
+                tasks_to_remove = successed_task + failed_task
+                completed_count = len(successed_task)
+                failed_count = len(failed_task)
+                remaining_count = len(self.running_tasks) - len(tasks_to_remove)
+
+                # Log batch completion if tasks were processed
+                if tasks_to_remove and (completed_count > 0 or failed_count > 0):
+                    logger.info(f"Task batch completed: {completed_count} succeeded, {failed_count} failed, {remaining_count} remaining")
+
                 await self._process_successed_tasks(successed_task)
                 await self._process_failed_tasks(failed_task)
-
-                # 4. update running tasks
-                tasks_to_remove = successed_task + failed_task
 
                 for task in tasks_to_remove:
                     self.running_tasks.remove(task)
                     del self.task_resource_map[task]
 
-            await asyncio.sleep(1)
+            # Adaptive sleep: shorter interval when more tasks are running
+            base_interval = 0.5 if len(self.running_tasks) > 5 else 1.0
+            await asyncio.sleep(base_interval)
+
+        logger.info("All download tasks completed successfully")
 
     async def wait_finished(self):
         if self.coroutine and not self.coroutine.done():

@@ -109,8 +109,12 @@ class RssMonitor:
             new_resources = await self.get_new_resources(self.websites, self.filter)
             if not new_resources:
                 logger.info("No new resources")
+                logger.info(f"RSS check completed, next check in {self.interval_time} seconds")
             else:
+                resource_count = len(new_resources)
+                logger.info(f"Found {resource_count} new resource(s), adding download tasks")
                 await DownloadManager.add_download_tasks(new_resources)
+                logger.info(f"RSS check completed, download tasks added, next check in {self.interval_time} seconds")
             await asyncio.sleep(self.interval_time)
 
     async def run_once_with_url(self, url: str):
