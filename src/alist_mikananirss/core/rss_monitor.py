@@ -109,18 +109,15 @@ class RssMonitor:
             new_resources = await self.get_new_resources(self.websites, self.filter)
             if not new_resources:
                 logger.info("No new resources")
+                # 没有新资源时，执行一次WebDAV修复检查，处理可能遗漏的问题
+                await self._execute_webdav_fix_if_enabled()
+                logger.info(f"RSS check completed, next check in {self.interval_time} seconds")
             else:
                 resource_count = len(new_resources)
                 logger.info(f"Found {resource_count} new resource(s), adding download tasks")
                 await DownloadManager.add_download_tasks(new_resources)
-
-            # 无论是否有新资源，都执行WebDAV修复检查
-            await self._execute_webdav_fix_if_enabled()
-
-            if not new_resources:
-                logger.info(f"RSS check completed, next check in {self.interval_time} seconds")
-            else:
                 logger.info(f"RSS check completed, download tasks added, next check in {self.interval_time} seconds")
+                logger.info("WebDAV修复将在所有下载任务完成后自动执行")
             await asyncio.sleep(self.interval_time)
 
     async def run_once_with_url(self, url: str):

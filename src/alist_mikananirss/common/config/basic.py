@@ -144,6 +144,9 @@ class BotAssistantConfig(BaseModel):
 
 class WebdavFixerConfig(BaseModel):
     """WebDAV修复工具配置"""
+    enable: bool = Field(
+        default=False, description="是否启用WebDAV修复工具"
+    )
     execute_mode: bool = Field(
         default=False, description="是否实际执行修复操作（false=仅预览）"
     )
@@ -162,6 +165,7 @@ class WebdavConfig(BaseModel):
     url: str = Field(..., description="WebDAV服务器URL")
     username: str = Field(default="admin", description="WebDAV用户名")
     password: str = Field(..., description="WebDAV密码")
+    timeout: int = Field(default=60, ge=1, le=600, description="WebDAV请求超时时间（秒）")
     fixer: WebdavFixerConfig = Field(
         default_factory=WebdavFixerConfig, description="WebDAV修复工具配置"
     )

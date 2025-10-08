@@ -82,6 +82,11 @@ async def run_webdav_fix(args, cfg):
     if alist_ver < "3.42.0":
         raise ValueError(f"Unsupported Alist version: {alist_ver}")
 
+    # 检查WebDAV修复器是否启用
+    if not cfg.webdav.fixer.enable:
+        logger.warning("WebDAV修复功能未启用，请在配置文件中设置 webdav.fixer.enable: true")
+        return False
+
     # 创建WebDAV修复器，使用配置文件中的WebDAV设置
     try:
         fixer = WebDAVNestedFixer(
@@ -211,7 +216,7 @@ async def run():
 
     # WebDAV fixer
     webdav_fixer = None
-    if cfg.webdav.fixer.execute_mode or cfg.webdav.fixer.recursive_scan:
+    if cfg.webdav.fixer.enable:
         try:
             webdav_fixer = WebDAVNestedFixer(
                 alist_client=alist_client,
@@ -236,7 +241,7 @@ async def run():
         need_notification=cfg.notification.enable,
         db=db,
         convert_torrent_to_magnet=cfg.alist.convert_torrent_to_magnet,
-        enable_webdav_fix=cfg.webdav.fixer.execute_mode,
+        enable_webdav_fix=cfg.webdav.fixer.enable,
         webdav=cfg.webdav,
         webdav_fixer=webdav_fixer,
     )
