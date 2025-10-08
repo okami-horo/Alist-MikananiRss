@@ -67,4 +67,4 @@ Docker，源码运行等更多的运行方法详见[使用文档](https://github
   uv run alist-mikananirss webdav-fix --dir "/115/TV/胆大党 第二季" --force --verbose
 
   # 递归扫描
-  uv run alist-mikananirss webdav-fix --dir "/115/TV/2025-07/" --recursive --force
+  uv run alist-mikananirss webdav-fix --dir "/115/TV/2025-10/" --recursive --force

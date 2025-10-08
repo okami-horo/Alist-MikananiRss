@@ -86,12 +86,18 @@ async def run_webdav_fix(args, cfg):
     fixer = WebDAVNestedFixer(alist_client, verbose=args.verbose)
 
     try:
+        # 确定使用的参数值：命令行参数优先，配置文件作为默认值
+        target_dir = args.dir  # 如果用户未指定，则为None，将使用配置文件的download_path
+        dry_run = None if args.force else None  # 如果指定了force，则dry_run=False，否则使用配置文件设置
+        handle_conflicts = args.conflicts  # 如果用户未指定，则为None，将使用配置文件的conflict_strategy
+        recursive = args.recursive if args.recursive else None  # 如果用户指定了递归，则使用该值，否则使用配置文件设置
+
         # 执行修复
         result = await fixer.fix_nested_structure(
-            target_dir=args.dir,
-            dry_run=not args.force,
-            handle_conflicts=args.conflicts,
-            recursive=args.recursive
+            target_dir=target_dir,
+            dry_run=dry_run,
+            handle_conflicts=handle_conflicts,
+            recursive=recursive
         )
 
         # 输出结果
@@ -133,13 +139,13 @@ async def run():
     )
     webdav_parser.add_argument(
         "--dir", "-d",
-        default=".",
-        help="指定要处理的目录路径",
+        default=None,
+        help="指定要处理的目录路径（如果未指定，将使用配置文件中的download_path）",
     )
     webdav_parser.add_argument(
         "--force", "-f",
         action="store_true",
-        help="执行实际操作（默认为预览模式）",
+        help="执行实际操作（默认为预览模式，或使用配置文件中的execute_mode设置）",
     )
     webdav_parser.add_argument(
         "--verbose", "-v",
@@ -149,13 +155,13 @@ async def run():
     webdav_parser.add_argument(
         "--recursive", "-r",
         action="store_true",
-        help="递归扫描子目录（默认仅扫描当前目录）",
+        help="递归扫描子目录（默认使用配置文件中的recursive_scan设置）",
     )
     webdav_parser.add_argument(
         "--conflicts", "-C",
         choices=["skip", "rename", "overwrite"],
-        default="overwrite",
-        help="冲突处理策略 (skip|rename|overwrite，默认为overwrite)",
+        default=None,
+        help="冲突处理策略 (skip|rename|overwrite，默认使用配置文件中的conflict_strategy设置)",
     )
 
     args = parser.parse_args()
