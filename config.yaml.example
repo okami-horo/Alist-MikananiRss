@@ -7,6 +7,15 @@ alist:
   downloader: qBittorrent # 或者 aria2
   download_path: Onedrive/Anime # 修改为你的下载路径(Alist中的路径)
 
+webdav:
+  url: "http://192.168.31.37:5244/dav" # WebDAV服务器URL（通常是Alist地址 + /dav）
+  username: "admin" # WebDAV用户名
+  password: "your_password" # WebDAV密码，请修改为您的实际密码
+  fixer:
+    execute_mode: false # 是否实际执行修复操作（false=仅预览，true=实际执行）
+    recursive_scan: true # 是否递归扫描子目录
+    conflict_strategy: "skip" # 冲突处理策略: "skip"(跳过), "rename"(重命名), "overwrite"(覆盖)
+
 mikan:
   subscribe_url:
     - https://mikanani.me/RSS/MyBangumi?token=xxx # 修改为你的蜜柑订阅地址

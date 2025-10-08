@@ -38,134 +38,93 @@ class WebDAVOperationError(Exception):
 class WebDAVNestedFixer:
     """WebDAV嵌套目录修复器 - 完全基于final脚本"""
 
-    def __init__(self, alist_client=None, verbose: bool = False, url: str = None, username: str = None, password: str = None):
+    def __init__(self, alist_client=None, verbose: bool = False, url: str = None, username: str = None, password: str = None, config=None):
         """
-        初始化WebDAV修复器 - 完全基于final脚本
+        初始化WebDAV修复器 - 使用传入的配置参数
 
         Args:
-            alist_client: 保持兼容性，但实际不使用
+            alist_client: Alist客户端，用于获取download_path
             verbose: 是否显示详细输出
             url: WebDAV服务器URL
             username: WebDAV用户名
             password: WebDAV密码
+            config: 配置对象，用于获取修复工具配置
         """
         self.verbose = verbose
-        self.alist_client = alist_client  # 保持兼容性
+        self.alist_client = alist_client  # 用于获取download_path
 
-        # 从alist_client配置中提取WebDAV信息，或者使用直接传入的参数
-        if url is None and alist_client:
-            # 从alist_client.base_url构建WebDAV URL
-            base_url = alist_client.base_url.rstrip('/')
-            self.url = base_url + '/dav'
-        elif url:
+        # 使用直接传入的WebDAV参数
+        if url:
             self.url = url
         else:
             # 默认值
             self.url = "http://127.0.0.1:5244/dav"
 
-        # 获取配置信息
-        config = self._load_config()
-        webdav_config = config.get('webdav', {})
-        fixer_config = config.get('fixer_config', {})
-        download_path = config.get('download_path')
+        self.username = username or 'admin'
+        self.password = password or ''
 
-        # 保存配置到实例
-        self.download_path = download_path
-        self.execute_mode = fixer_config.get('execute_mode', False)
-        self.recursive_scan = fixer_config.get('recursive_scan', True)
-        self.conflict_strategy = fixer_config.get('conflict_strategy', 'skip')
+        # 从配置或alist_client获取download_path
+        self.download_path = None
+        if config:
+            self.download_path = config.alist.download_path
+        elif alist_client:
+            try:
+                # 尝试从配置获取download_path
+                from alist_mikananirss.common.config import ConfigManager
+                cfg_manager = ConfigManager()
+                cfg = cfg_manager.get_config()
+                self.download_path = cfg.alist.download_path
+            except Exception:
+                logger.debug("无法从配置获取download_path，将使用默认路径")
 
-        if webdav_config.get('url'):
-            self.url = webdav_config.get('url')
-        self.username = webdav_config.get('username', 'admin')
-        self.password = webdav_config.get('password', '')
+        # 获取WebDAV修复工具配置
+        if config:
+            # 使用传入的配置对象
+            self.execute_mode = config.webdav.fixer.execute_mode
+            self.recursive_scan = config.webdav.fixer.recursive_scan
+            self.conflict_strategy = config.webdav.fixer.conflict_strategy
+            logger.info(f"成功加载WebDAV修复工具配置: execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
+        else:
+            # 尝试从ConfigManager获取配置
+            try:
+                from alist_mikananirss.common.config import ConfigManager
+                cfg_manager = ConfigManager()
+                cfg = cfg_manager.get_config()
+                self.execute_mode = cfg.webdav.fixer.execute_mode
+                self.recursive_scan = cfg.webdav.fixer.recursive_scan
+                self.conflict_strategy = cfg.webdav.fixer.conflict_strategy
+                logger.info(f"成功加载WebDAV修复工具配置: execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
+            except Exception as e:
+                # 使用配置模型中的默认值
+                from alist_mikananirss.common.config.basic import WebdavFixerConfig
+                default_config = WebdavFixerConfig()
+                self.execute_mode = default_config.execute_mode
+                self.recursive_scan = default_config.recursive_scan
+                self.conflict_strategy = default_config.conflict_strategy
+                logger.warning(f"加载WebDAV修复工具配置失败，使用默认配置: {str(e)}")
+                logger.info(f"使用默认配置: execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
 
-        logger.info(f"从配置文件加载WebDAV认证信息: {self.username}@{self.url}")
+        logger.info(f"WebDAV认证信息: {self.username}@{self.url}")
         if self.download_path:
             logger.info(f"使用download_path作为默认处理路径: {self.download_path}")
         logger.info(f"修复工具配置: execute_mode={self.execute_mode}, recursive_scan={self.recursive_scan}, conflict_strategy={self.conflict_strategy}")
 
-        # 创建WebDAV客户端 - 基于final脚本
+        # 创建WebDAV客户端
         self.client = Client(
             base_url=self.url,
             auth=(self.username, self.password),
             timeout=20.0  # 设置20秒超时，适配115云的慢响应
         )
 
-        # 测试连接 - 异步版本
-        asyncio.create_task(self._test_connection())
+        # 连接测试将在第一次使用时进行
+        self._connection_tested = False
 
-    def _load_config(self) -> Dict:
-        """
-        加载配置文件（包括config.yaml和webdav_config.yaml）
-
-        Returns:
-            Dict: 配置信息
-        """
-        config = {
-            'webdav': {},
-            'download_path': None,
-            'fixer_config': {}
-        }
-
-        # 加载config.yaml获取download_path
-        main_config_paths = [
-            'config.yaml',
-            'config/config.yaml',
-            '/workspace/Alist-MikananiRss/config.yaml'
-        ]
-
-        for config_path in main_config_paths:
-            if os.path.exists(config_path):
-                try:
-                    with open(config_path, 'r', encoding='utf-8') as f:
-                        main_config = yaml.safe_load(f)
-                        alist_config = main_config.get('alist', {})
-                        download_path = alist_config.get('download_path')
-                        if download_path:
-                            config['download_path'] = download_path
-                            logger.info(f"从config.yaml加载download_path: {download_path}")
-                            break
-                except Exception as e:
-                    logger.warning(f"读取config.yaml失败 {config_path}: {str(e)}")
-                    continue
-
-        # 加载webdav_config.yaml
-        webdav_config_paths = [
-            'webdav_config.yaml',
-            'config/webdav_config.yaml',
-            '/workspace/Alist-MikananiRss/webdav_config.yaml'
-        ]
-
-        for config_path in webdav_config_paths:
-            if os.path.exists(config_path):
-                try:
-                    with open(config_path, 'r', encoding='utf-8') as f:
-                        webdav_full_config = yaml.safe_load(f)
-                        webdav_config = webdav_full_config.get('webdav', {})
-
-                        # 提取基本WebDAV配置
-                        config['webdav'] = {
-                            'url': webdav_config.get('url'),
-                            'username': webdav_config.get('username'),
-                            'password': webdav_config.get('password')
-                        }
-
-                        # 提取fixer配置
-                        fixer_config = webdav_config.get('fixer', {})
-                        config['fixer_config'] = {
-                            'execute_mode': fixer_config.get('execute_mode', False),
-                            'recursive_scan': fixer_config.get('recursive_scan', True),
-                            'conflict_strategy': fixer_config.get('conflict_strategy', 'skip')
-                        }
-
-                        logger.info(f"从webdav_config.yaml加载配置: execute_mode={config['fixer_config']['execute_mode']}, recursive_scan={config['fixer_config']['recursive_scan']}")
-                        return config
-                except Exception as e:
-                    logger.warning(f"读取WebDAV配置文件失败 {config_path}: {str(e)}")
-                    continue
-
-        return config
+  
+    async def _ensure_connection_tested(self):
+        """确保连接测试已完成（如果需要）"""
+        if not self._connection_tested:
+            await self._test_connection()
+            self._connection_tested = True
 
     async def _test_connection(self):
         """测试WebDAV连接 - 基于final脚本"""
@@ -232,6 +191,9 @@ class WebDAVNestedFixer:
         nested_pairs = []
 
         try:
+            # 确保连接已测试
+            await self._ensure_connection_tested()
+
             # 直接使用用户输入的路径，不进行转换
             directory = self._normalize_path(directory)
             if self.verbose:

@@ -82,8 +82,19 @@ async def run_webdav_fix(args, cfg):
     if alist_ver < "3.42.0":
         raise ValueError(f"Unsupported Alist version: {alist_ver}")
 
-    # 创建WebDAV修复器
-    fixer = WebDAVNestedFixer(alist_client, verbose=args.verbose)
+    # 创建WebDAV修复器，使用配置文件中的WebDAV设置
+    try:
+        fixer = WebDAVNestedFixer(
+            alist_client=alist_client,
+            verbose=args.verbose,
+            url=cfg.webdav.url,
+            username=cfg.webdav.username,
+            password=cfg.webdav.password,
+            config=cfg
+        )
+    except Exception as e:
+        logger.error(f"WebDAV修复器初始化失败: {str(e)}")
+        raise
 
     try:
         # 确定使用的参数值：命令行参数优先，配置文件作为默认值
@@ -198,6 +209,25 @@ async def run():
     if alist_ver < "3.42.0":
         raise ValueError(f"Unsupported Alist version: {alist_ver}")
 
+    # WebDAV fixer
+    webdav_fixer = None
+    if cfg.webdav.fixer.execute_mode or cfg.webdav.fixer.recursive_scan:
+        try:
+            webdav_fixer = WebDAVNestedFixer(
+                alist_client=alist_client,
+                verbose=False,  # 启动时不显示详细输出
+                url=cfg.webdav.url,
+                username=cfg.webdav.username,
+                password=cfg.webdav.password,
+                config=cfg
+            )
+            logger.info("WebDAV修复器初始化成功")
+        except Exception as e:
+            logger.error(f"WebDAV修复器初始化失败: {str(e)}")
+            # 如果配置错误但启用了修复功能，应该抛出异常
+            if cfg.webdav.fixer.execute_mode:
+                raise
+
     # download manager
     DownloadManager.initialize(
         alist_client=alist_client,
@@ -206,7 +236,9 @@ async def run():
         need_notification=cfg.notification.enable,
         db=db,
         convert_torrent_to_magnet=cfg.alist.convert_torrent_to_magnet,
-        enable_webdav_fix=cfg.alist.enable_webdav_fix,
+        enable_webdav_fix=cfg.webdav.fixer.execute_mode,
+        webdav=cfg.webdav,
+        webdav_fixer=webdav_fixer,
     )
 
     # extractor
