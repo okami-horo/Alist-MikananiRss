@@ -205,6 +205,8 @@ async def run():
         use_renamer=cfg.rename.enable,
         need_notification=cfg.notification.enable,
         db=db,
+        convert_torrent_to_magnet=cfg.alist.convert_torrent_to_magnet,
+        enable_webdav_fix=cfg.alist.enable_webdav_fix,
     )
 
     # extractor

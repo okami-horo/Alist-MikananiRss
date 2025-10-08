@@ -26,6 +26,7 @@ from alist_mikananirss.websites.models import ResourceInfo
 from ..utils import FixedSizeSet, Singleton
 from .notification_sender import NotificationSender
 from .renamer import AnimeRenamer
+from .webdav_fixer import WebDAVNestedFixer
 
 
 class TaskMonitor:
@@ -42,6 +43,7 @@ class TaskMonitor:
         db: SubscribeDatabase,
         use_renamer: bool,
         need_notification: bool,
+        enable_webdav_fix: bool = False,
     ):
         self.alist_client = alist_client
         self.db = db
@@ -50,6 +52,7 @@ class TaskMonitor:
         self.need_notification = need_notification
         self.running_tasks: list[AlistTask] = []
         self.task_resource_map: dict[AlistTask, ResourceInfo] = {}
+        self._webdav_fix_enabled = enable_webdav_fix
 
         self.lock = asyncio.Lock()
         self.coroutine = None
@@ -328,6 +331,47 @@ class TaskMonitor:
 
         logger.info("All download tasks completed successfully")
 
+        # 执行WebDAV嵌套目录修复（如果启用）
+        await self._execute_webdav_fix_if_needed()
+
+    async def _execute_webdav_fix_if_needed(self):
+        """在所有下载任务完成后执行WebDAV嵌套目录修复（如果启用）"""
+        try:
+            # 检查全局是否启用webdav-fix
+            # 通过检查是否已有DownloadManager实例启用webdav-fix
+            if not hasattr(self, '_webdav_fix_enabled') or not self._webdav_fix_enabled:
+                logger.debug("WebDAV修复功能未启用，跳过嵌套目录修复")
+                return
+
+            logger.info("开始执行WebDAV嵌套目录修复...")
+
+            # 创建WebDAV修复器
+            fixer = WebDAVNestedFixer(alist_client=self.alist_client, verbose=True)
+
+            # 执行修复（使用配置文件中的设置）
+            result = await fixer.fix_nested_structure()
+
+            # 输出结果
+            if result['success']:
+                logger.info(f"WebDAV嵌套目录修复完成: 发现{result['total_found']}个问题，成功修复{result['success_count']}个")
+                if result['skip_count'] > 0:
+                    logger.info(f"跳过{result['skip_count']}个文件")
+                if result['error_count'] > 0:
+                    logger.warning(f"修复过程中发生{result['error_count']}个错误")
+            else:
+                logger.error(f"WebDAV嵌套目录修复部分失败: 发现{result['total_found']}个问题，成功修复{result['success_count']}个，错误{result['error_count']}个")
+                if result['errors']:
+                    logger.error("错误详情:")
+                    for error in result['errors'][:3]:  # 只显示前3个错误
+                        logger.error(f"  - {error}")
+                        if len(result['errors']) > 3:
+                            logger.error(f"  ... 还有{len(result['errors']) - 3}个错误")
+                            break
+
+        except Exception as e:
+            logger.error(f"执行WebDAV嵌套目录修复时发生错误: {str(e)}")
+            logger.debug(f"WebDAV修复错误详情: {e}", exc_info=True)
+
     async def wait_finished(self):
         if self.coroutine and not self.coroutine.done():
             await self.coroutine
@@ -342,16 +386,19 @@ class DownloadManager(metaclass=Singleton):
         need_notification: bool = False,
         db: SubscribeDatabase = None,
         convert_torrent_to_magnet: bool = False,
+        enable_webdav_fix: bool = False,
     ):
         self.alist_client = alist_client
         self.base_download_path = base_download_path
         self.db = db
         self.convert_torrent_to_magnet = convert_torrent_to_magnet
+        self.enable_webdav_fix = enable_webdav_fix
         self.task_monitor = TaskMonitor(
             alist_client=alist_client,
             db=db,
             use_renamer=use_renamer,
             need_notification=need_notification,
+            enable_webdav_fix=enable_webdav_fix,
         )
 
     @classmethod
@@ -363,6 +410,7 @@ class DownloadManager(metaclass=Singleton):
         need_notification: bool = False,
         db: SubscribeDatabase = None,
         convert_torrent_to_magnet: bool = False,
+        enable_webdav_fix: bool = False,
     ) -> None:
         cls(
             alist_client=alist_client,
@@ -371,6 +419,7 @@ class DownloadManager(metaclass=Singleton):
             need_notification=need_notification,
             db=db,
             convert_torrent_to_magnet=convert_torrent_to_magnet,
+            enable_webdav_fix=enable_webdav_fix,
         )
 
     def _build_download_path(self, resource: ResourceInfo) -> str:
