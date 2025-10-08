@@ -31,6 +31,10 @@ class AlistConfig(BaseModel):
         default=False,
         description="Convert torrent files to magnet links before downloading",
     )
+    enable_webdav_fix: bool = Field(
+        default=False,
+        description="Enable WebDAV nested directory structure fix after download completion",
+    )
 
     @field_validator("base_url")
     @classmethod
