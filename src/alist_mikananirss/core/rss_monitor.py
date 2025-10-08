@@ -109,11 +109,17 @@ class RssMonitor:
             new_resources = await self.get_new_resources(self.websites, self.filter)
             if not new_resources:
                 logger.info("No new resources")
-                logger.info(f"RSS check completed, next check in {self.interval_time} seconds")
             else:
                 resource_count = len(new_resources)
                 logger.info(f"Found {resource_count} new resource(s), adding download tasks")
                 await DownloadManager.add_download_tasks(new_resources)
+
+            # 无论是否有新资源，都执行WebDAV修复检查
+            await self._execute_webdav_fix_if_enabled()
+
+            if not new_resources:
+                logger.info(f"RSS check completed, next check in {self.interval_time} seconds")
+            else:
                 logger.info(f"RSS check completed, download tasks added, next check in {self.interval_time} seconds")
             await asyncio.sleep(self.interval_time)
 
@@ -126,3 +132,47 @@ class RssMonitor:
         else:
             await DownloadManager.add_download_tasks(new_resources)
         return new_resources
+
+    async def _execute_webdav_fix_if_enabled(self):
+        """执行WebDAV修复（如果启用）"""
+        try:
+            # 获取DownloadManager实例
+            download_manager = DownloadManager()
+
+            # 检查是否启用了WebDAV修复功能
+            if not hasattr(download_manager, 'webdav_fixer') or not download_manager.webdav_fixer:
+                logger.debug("WebDAV修复器未初始化，跳过嵌套目录修复")
+                return
+
+            if not hasattr(download_manager, 'enable_webdav_fix') or not download_manager.enable_webdav_fix:
+                logger.debug("WebDAV修复功能未启用，跳过嵌套目录修复")
+                return
+
+            logger.info("开始执行WebDAV嵌套目录修复...")
+
+            # 设置为详细模式用于执行时的日志输出
+            download_manager.webdav_fixer.verbose = True
+
+            # 执行修复
+            result = await download_manager.webdav_fixer.fix_nested_structure()
+
+            # 输出结果
+            if result['success']:
+                logger.info(f"WebDAV嵌套目录修复完成: 发现{result['total_found']}个问题，成功修复{result['success_count']}个")
+                if result['skip_count'] > 0:
+                    logger.info(f"跳过{result['skip_count']}个文件")
+                if result['error_count'] > 0:
+                    logger.warning(f"修复过程中发生{result['error_count']}个错误")
+            else:
+                logger.error(f"WebDAV嵌套目录修复部分失败: 发现{result['total_found']}个问题，成功修复{result['success_count']}个，错误{result['error_count']}个")
+                if result['errors']:
+                    logger.error("错误详情:")
+                    for error in result['errors'][:3]:  # 只显示前3个错误
+                        logger.error(f"  - {error}")
+                        if len(result['errors']) > 3:
+                            logger.error(f"  ... 还有{len(result['errors']) - 3}个错误")
+                            break
+
+        except Exception as e:
+            logger.error(f"执行WebDAV嵌套目录修复时发生错误: {str(e)}")
+            logger.debug(f"WebDAV修复错误详情: {e}", exc_info=True)

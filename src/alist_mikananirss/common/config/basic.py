@@ -31,10 +31,6 @@ class AlistConfig(BaseModel):
         default=False,
         description="Convert torrent files to magnet links before downloading",
     )
-    enable_webdav_fix: bool = Field(
-        default=False,
-        description="Enable WebDAV nested directory structure fix after download completion",
-    )
 
     @field_validator("base_url")
     @classmethod
@@ -144,6 +140,40 @@ class BotAssistantConfig(BaseModel):
         if self.enable and len(self.bots) == 0:
             raise ValueError("Bot assistant is enabled but no bot config provided")
         return self
+
+
+class WebdavFixerConfig(BaseModel):
+    """WebDAV修复工具配置"""
+    execute_mode: bool = Field(
+        default=False, description="是否实际执行修复操作（false=仅预览）"
+    )
+    recursive_scan: bool = Field(
+        default=True, description="是否递归扫描子目录"
+    )
+    conflict_strategy: str = Field(
+        default="skip",
+        pattern="^(skip|rename|overwrite)$",
+        description="冲突处理策略"
+    )
+
+
+class WebdavConfig(BaseModel):
+    """WebDAV配置"""
+    url: str = Field(..., description="WebDAV服务器URL")
+    username: str = Field(default="admin", description="WebDAV用户名")
+    password: str = Field(..., description="WebDAV密码")
+    fixer: WebdavFixerConfig = Field(
+        default_factory=WebdavFixerConfig, description="WebDAV修复工具配置"
+    )
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, url: str) -> str:
+        try:
+            HttpUrl(url)
+            return url
+        except ValueError:
+            raise ValueError(f"Invalid WebDAV URL: {url}")
 
 
 class DevConfig(BaseModel):

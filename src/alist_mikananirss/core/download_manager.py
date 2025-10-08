@@ -44,6 +44,7 @@ class TaskMonitor:
         use_renamer: bool,
         need_notification: bool,
         enable_webdav_fix: bool = False,
+        webdav_fixer=None,
     ):
         self.alist_client = alist_client
         self.db = db
@@ -53,6 +54,7 @@ class TaskMonitor:
         self.running_tasks: list[AlistTask] = []
         self.task_resource_map: dict[AlistTask, ResourceInfo] = {}
         self._webdav_fix_enabled = enable_webdav_fix
+        self.webdav_fixer = webdav_fixer
 
         self.lock = asyncio.Lock()
         self.coroutine = None
@@ -345,8 +347,14 @@ class TaskMonitor:
 
             logger.info("开始执行WebDAV嵌套目录修复...")
 
-            # 创建WebDAV修复器
-            fixer = WebDAVNestedFixer(alist_client=self.alist_client, verbose=True)
+            # 使用预初始化的WebDAV修复器
+            if not self.webdav_fixer:
+                logger.error("WebDAV修复器未初始化，无法执行修复")
+                return
+
+            # 设置为详细模式用于执行时的日志输出
+            self.webdav_fixer.verbose = True
+            fixer = self.webdav_fixer
 
             # 执行修复（使用配置文件中的设置）
             result = await fixer.fix_nested_structure()
@@ -387,18 +395,23 @@ class DownloadManager(metaclass=Singleton):
         db: SubscribeDatabase = None,
         convert_torrent_to_magnet: bool = False,
         enable_webdav_fix: bool = False,
+        webdav=None,
+        webdav_fixer=None,
     ):
         self.alist_client = alist_client
         self.base_download_path = base_download_path
         self.db = db
         self.convert_torrent_to_magnet = convert_torrent_to_magnet
         self.enable_webdav_fix = enable_webdav_fix
+        self.webdav = webdav  # 保存完整的 webdav 配置对象
+        self.webdav_fixer = webdav_fixer  # 预初始化的 WebDAV 修复器
         self.task_monitor = TaskMonitor(
             alist_client=alist_client,
             db=db,
             use_renamer=use_renamer,
             need_notification=need_notification,
             enable_webdav_fix=enable_webdav_fix,
+            webdav_fixer=webdav_fixer,
         )
 
     @classmethod
@@ -411,6 +424,8 @@ class DownloadManager(metaclass=Singleton):
         db: SubscribeDatabase = None,
         convert_torrent_to_magnet: bool = False,
         enable_webdav_fix: bool = False,
+        webdav=None,
+        webdav_fixer=None,
     ) -> None:
         cls(
             alist_client=alist_client,
@@ -420,6 +435,8 @@ class DownloadManager(metaclass=Singleton):
             db=db,
             convert_torrent_to_magnet=convert_torrent_to_magnet,
             enable_webdav_fix=enable_webdav_fix,
+            webdav=webdav,
+            webdav_fixer=webdav_fixer,
         )
 
     def _build_download_path(self, resource: ResourceInfo) -> str:
