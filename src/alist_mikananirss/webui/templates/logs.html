@@ -1,0 +1,580 @@
+{% extends "base.html" %}
+
+{% block title %}日志查看 - Alist-MikananiRss WebUI{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">
+            <i class="bi bi-file-text me-2"></i>
+            日志查看
+        </h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <div class="btn-group me-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshLogs()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    刷新
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearLogs()">
+                    <i class="bi bi-trash me-1"></i>
+                    清空
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="downloadLogs()">
+                    <i class="bi bi-download me-1"></i>
+                    下载
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志控制面板 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <!-- 日志文件选择 -->
+                        <div class="col-md-3">
+                            <label for="logFile" class="form-label">日志文件</label>
+                            <select class="form-select" id="logFile" onchange="loadLogFile()">
+                                <option value="">加载中...</option>
+                            </select>
+                        </div>
+
+                        <!-- 日志级别过滤 -->
+                        <div class="col-md-2">
+                            <label for="logLevel" class="form-label">日志级别</label>
+                            <select class="form-select" id="logLevel" onchange="filterLogs()">
+                                <option value="all">全部</option>
+                                <option value="debug">DEBUG</option>
+                                <option value="info">INFO</option>
+                                <option value="warning">WARNING</option>
+                                <option value="error">ERROR</option>
+                                <option value="critical">CRITICAL</option>
+                            </select>
+                        </div>
+
+                        <!-- 搜索框 -->
+                        <div class="col-md-4">
+                            <label for="searchInput" class="form-label">搜索内容</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="searchInput" placeholder="输入关键词搜索...">
+                                <button class="btn btn-outline-secondary" type="button" onclick="searchLogs()">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 自动滚动 -->
+                        <div class="col-md-2">
+                            <label for="autoScroll" class="form-label">&nbsp;</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="autoScroll" checked>
+                                <label class="form-check-label" for="autoScroll">
+                                    自动滚动
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 实时监控 -->
+                        <div class="col-md-1">
+                            <label for="realtimeMode" class="form-label">&nbsp;</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="realtimeMode" onchange="toggleRealtime()">
+                                <label class="form-check-label" for="realtimeMode">
+                                    实时
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志统计信息 -->
+    <div class="row mb-4">
+        <div class="col-md-2 mb-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="fs-4 fw-bold text-primary" id="totalLogs">0</div>
+                    <div class="text-muted">总日志数</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="fs-4 fw-bold text-info" id="debugLogs">0</div>
+                    <div class="text-muted">DEBUG</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="fs-4 fw-bold text-success" id="infoLogs">0</div>
+                    <div class="text-muted">INFO</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="fs-4 fw-bold text-warning" id="warningLogs">0</div>
+                    <div class="text-muted">WARNING</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="fs-4 fw-bold text-danger" id="errorLogs">0</div>
+                    <div class="text-muted">ERROR</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="fs-4 fw-bold text-danger" id="criticalLogs">0</div>
+                    <div class="text-muted">CRITICAL</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志内容显示 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-terminal me-2"></i>
+                        日志内容
+                    </h5>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-secondary" onclick="scrollToTop()">
+                            <i class="bi bi-arrow-up"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="scrollToBottom()">
+                            <i class="bi bi-arrow-down"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="log-container" id="logContainer">
+                        <div class="text-center p-4">
+                            <div class="loading-spinner"></div>
+                            <p class="mt-2">加载日志中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分页控制 -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="text-muted">
+                    显示 <span id="showingFrom">0</span> - <span id="showingTo">0</span> 条，共 <span id="totalCount">0</span> 条
+                </div>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0" id="pagination">
+                        <!-- 分页按钮将动态生成 -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日志详情模态框 -->
+<div class="modal fade" id="logDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">日志详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="logDetailContent">
+                    <!-- 日志详情内容 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentLogFile = '';
+    let currentLogs = [];
+    let filteredLogs = [];
+    let currentPage = 1;
+    let logsPerPage = 100;
+    let eventSource = null;
+    let isRealtimeMode = false;
+
+    // 页面初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        setActiveNav('logs');
+        loadLogFiles();
+    });
+
+    // 加载日志文件列表
+    async function loadLogFiles() {
+        try {
+            const files = await apiCall('/api/logs/files');
+            const select = document.getElementById('logFile');
+
+            select.innerHTML = '';
+            files.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file.name;
+                option.textContent = `${file.name} (${formatFileSize(file.size)})`;
+                select.appendChild(option);
+            });
+
+            // 自动选择最新的日志文件
+            if (files.length > 0) {
+                select.value = files[0].name;
+                loadLogFile();
+            }
+
+        } catch (error) {
+            console.error('加载日志文件列表失败:', error);
+            showNotification('加载日志文件列表失败: ' + error.message, 'danger');
+        }
+    }
+
+    // 加载日志文件内容
+    async function loadLogFile() {
+        const fileName = document.getElementById('logFile').value;
+        if (!fileName) return;
+
+        currentLogFile = fileName;
+        currentPage = 1;
+
+        try {
+            const data = await apiCall(`/api/logs/content?file=${encodeURIComponent(fileName)}&limit=${logsPerPage * 5}`);
+            currentLogs = data.entries || [];
+            filteredLogs = [...currentLogs];
+
+            updateLogDisplay();
+            updateStatistics();
+
+        } catch (error) {
+            console.error('加载日志文件失败:', error);
+            document.getElementById('logContainer').innerHTML = `
+                <div class="alert alert-danger m-3">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    加载日志文件失败: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    // 更新日志显示
+    function updateLogDisplay() {
+        const container = document.getElementById('logContainer');
+        const start = (currentPage - 1) * logsPerPage;
+        const end = start + logsPerPage;
+        const pageLogs = filteredLogs.slice(start, end);
+
+        if (pageLogs.length === 0) {
+            container.innerHTML = `
+                <div class="text-center p-4">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <p class="text-muted mt-2">暂无日志内容</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = pageLogs.map(log => `
+            <div class="log-entry log-level-${log.level}" onclick="showLogDetail('${log.timestamp}', '${log.level}', '${log.message.replace(/'/g, "\\'")}')">
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">[${formatTime(log.timestamp)}]</span>
+                    <span class="badge bg-${getLevelColor(log.level)}">${log.level}</span>
+                </div>
+                <div class="mt-1">${escapeHtml(log.message)}</div>
+            </div>
+        `).join('');
+
+        // 更新分页信息
+        updatePagination();
+
+        // 自动滚动到底部
+        if (document.getElementById('autoScroll').checked) {
+            setTimeout(() => scrollToBottom(), 100);
+        }
+    }
+
+    // 更新统计信息
+    function updateStatistics() {
+        const stats = {
+            total: filteredLogs.length,
+            debug: 0,
+            info: 0,
+            warning: 0,
+            error: 0,
+            critical: 0
+        };
+
+        filteredLogs.forEach(log => {
+            const level = log.level.toLowerCase();
+            if (stats[level] !== undefined) {
+                stats[level]++;
+            }
+        });
+
+        document.getElementById('totalLogs').textContent = stats.total;
+        document.getElementById('debugLogs').textContent = stats.debug;
+        document.getElementById('infoLogs').textContent = stats.info;
+        document.getElementById('warningLogs').textContent = stats.warning;
+        document.getElementById('errorLogs').textContent = stats.error;
+        document.getElementById('criticalLogs').textContent = stats.critical;
+    }
+
+    // 更新分页
+    function updatePagination() {
+        const totalPages = Math.ceil(filteredLogs.length / logsPerPage);
+        const pagination = document.getElementById('pagination');
+
+        // 更新显示信息
+        const start = (currentPage - 1) * logsPerPage + 1;
+        const end = Math.min(currentPage * logsPerPage, filteredLogs.length);
+
+        document.getElementById('showingFrom').textContent = filteredLogs.length > 0 ? start : 0;
+        document.getElementById('showingTo').textContent = end;
+        document.getElementById('totalCount').textContent = filteredLogs.length;
+
+        // 生成分页按钮
+        let paginationHTML = '';
+
+        // 上一页
+        paginationHTML += `
+            <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${currentPage - 1}); return false;">上一页</a>
+            </li>
+        `;
+
+        // 页码
+        for (let i = 1; i <= Math.min(totalPages, 10); i++) {
+            paginationHTML += `
+                <li class="page-item ${i === currentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="changePage(${i}); return false;">${i}</a>
+                </li>
+            `;
+        }
+
+        // 下一页
+        paginationHTML += `
+            <li class="page-item ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${currentPage + 1}); return false;">下一页</a>
+            </li>
+        `;
+
+        pagination.innerHTML = paginationHTML;
+    }
+
+    // 切换页面
+    function changePage(page) {
+        currentPage = page;
+        updateLogDisplay();
+    }
+
+    // 过滤日志
+    function filterLogs() {
+        const level = document.getElementById('logLevel').value;
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+        filteredLogs = currentLogs.filter(log => {
+            // 级别过滤
+            if (level !== 'all' && log.level.toLowerCase() !== level) {
+                return false;
+            }
+
+            // 搜索过滤
+            if (searchTerm && !log.message.toLowerCase().includes(searchTerm)) {
+                return false;
+            }
+
+            return true;
+        });
+
+        currentPage = 1;
+        updateLogDisplay();
+        updateStatistics();
+    }
+
+    // 搜索日志
+    function searchLogs() {
+        filterLogs();
+    }
+
+    // 清空日志
+    function clearLogs() {
+        confirmAction('确定要清空当前显示的日志吗？', function() {
+            currentLogs = [];
+            filteredLogs = [];
+            updateLogDisplay();
+            updateStatistics();
+            showNotification('日志已清空', 'success');
+        });
+    }
+
+    // 下载日志
+    async function downloadLogs() {
+        if (!currentLogFile) {
+            showNotification('请先选择要下载的日志文件', 'warning');
+            return;
+        }
+
+        try {
+            window.open(`/api/logs/download?file=${encodeURIComponent(currentLogFile)}`, '_blank');
+            showNotification('日志下载已开始', 'success');
+        } catch (error) {
+            showNotification('下载失败: ' + error.message, 'danger');
+        }
+    }
+
+    // 刷新日志
+    function refreshLogs() {
+        loadLogFile();
+        showNotification('日志已刷新', 'info');
+    }
+
+    // 切换实时模式
+    function toggleRealtime() {
+        isRealtimeMode = document.getElementById('realtimeMode').checked;
+
+        if (isRealtimeMode) {
+            startRealtimeMode();
+        } else {
+            stopRealtimeMode();
+        }
+    }
+
+    // 开始实时模式
+    function startRealtimeMode() {
+        if (!currentLogFile) {
+            showNotification('请先选择日志文件', 'warning');
+            document.getElementById('realtimeMode').checked = false;
+            return;
+        }
+
+        try {
+            eventSource = new EventSource(`/api/logs/stream?file=${encodeURIComponent(currentLogFile)}`);
+
+            eventSource.onmessage = function(event) {
+                const newLog = JSON.parse(event.data);
+                currentLogs.push(newLog);
+
+                // 保持最近1000条日志
+                if (currentLogs.length > 1000) {
+                    currentLogs.shift();
+                }
+
+                filterLogs();
+            };
+
+            eventSource.onerror = function() {
+                showNotification('实时连接断开', 'warning');
+                stopRealtimeMode();
+            };
+
+            showNotification('实时监控已开启', 'success');
+
+        } catch (error) {
+            showNotification('开启实时监控失败: ' + error.message, 'danger');
+            document.getElementById('realtimeMode').checked = false;
+        }
+    }
+
+    // 停止实时模式
+    function stopRealtimeMode() {
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+        showNotification('实时监控已关闭', 'info');
+    }
+
+    // 显示日志详情
+    function showLogDetail(timestamp, level, message) {
+        const modal = new bootstrap.Modal(document.getElementById('logDetailModal'));
+        const content = document.getElementById('logDetailContent');
+
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-3"><strong>时间:</strong></div>
+                <div class="col-md-9">${formatTime(timestamp)}</div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-3"><strong>级别:</strong></div>
+                <div class="col-md-9">
+                    <span class="badge bg-${getLevelColor(level)}">${level}</span>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-3"><strong>消息:</strong></div>
+                <div class="col-md-9">
+                    <pre class="bg-light p-2 rounded">${escapeHtml(message)}</pre>
+                </div>
+            </div>
+        `;
+
+        modal.show();
+    }
+
+    // 滚动控制
+    function scrollToTop() {
+        const container = document.getElementById('logContainer');
+        container.scrollTop = 0;
+    }
+
+    function scrollToBottom() {
+        const container = document.getElementById('logContainer');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // 工具函数
+    function getLevelColor(level) {
+        const colors = {
+            'DEBUG': 'secondary',
+            'INFO': 'info',
+            'WARNING': 'warning',
+            'ERROR': 'danger',
+            'CRITICAL': 'danger'
+        };
+        return colors[level] || 'secondary';
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // 页面卸载时清理
+    window.addEventListener('beforeunload', function() {
+        stopRealtimeMode();
+    });
+
+    // 搜索框回车事件
+    document.getElementById('searchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            searchLogs();
+        }
+    });
+</script>
+{% endblock %}

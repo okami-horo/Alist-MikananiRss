@@ -180,6 +180,29 @@ class WebdavConfig(BaseModel):
             raise ValueError(f"Invalid WebDAV URL: {url}")
 
 
+class WebUIConfig(BaseModel):
+    """WebUI配置"""
+    enable: bool = Field(
+        default=False, description="是否启用WebUI界面"
+    )
+    host: str = Field(
+        default="0.0.0.0", description="WebUI服务器绑定地址"
+    )
+    port: int = Field(
+        default=8080, ge=1, le=65535, description="WebUI服务器端口"
+    )
+    debug: bool = Field(
+        default=False, description="是否启用调试模式"
+    )
+    secret_key: str = Field(
+        default="alist-mikananirss-webui-secret-key",
+        description="WebUI会话密钥"
+    )
+    session_timeout: int = Field(
+        default=3600, ge=300, description="会话超时时间（秒）"
+    )
+
+
 class DevConfig(BaseModel):
     log_level: str = Field(
         default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$"
