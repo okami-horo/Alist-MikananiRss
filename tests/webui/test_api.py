@@ -5,8 +5,10 @@ WebUI API单元测试
 """
 
 import json
-import pytest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 from aioresponses import aioresponses
 
@@ -121,19 +123,25 @@ class TestLogsAPI:
     async def test_get_log_content(self, mock_service):
         """测试获取日志内容"""
         mock_logs = [
-            LogEntry(
-                timestamp="2025-10-10T10:00:00",
-                level="INFO",
-                message="System started successfully"
-            ),
-            LogEntry(
-                timestamp="2025-10-10T10:01:00",
-                level="WARNING",
-                message="High memory usage detected"
-            )
+            {
+                "timestamp": "2025-10-10T10:00:00",
+                "level": "INFO",
+                "message": "System started successfully",
+                "module": None,
+                "line_number": None,
+                "thread_id": None,
+            },
+            {
+                "timestamp": "2025-10-10T10:01:00",
+                "level": "WARNING",
+                "message": "High memory usage detected",
+                "module": None,
+                "line_number": None,
+                "thread_id": None,
+            },
         ]
         mock_service.get_log_content.return_value = {
-            "entries": [log.dict() for log in mock_logs],
+            "entries": mock_logs,
             "total": 2,
             "has_more": False
         }
@@ -151,11 +159,14 @@ class TestLogsAPI:
     async def test_get_recent_logs(self, mock_service):
         """测试获取最近日志"""
         mock_service.get_recent_logs.return_value = [
-            LogEntry(
-                timestamp="2025-10-10T10:05:00",
-                level="ERROR",
-                message="Connection failed"
-            ).dict()
+            {
+                "timestamp": "2025-10-10T10:05:00",
+                "level": "ERROR",
+                "message": "Connection failed",
+                "module": None,
+                "line_number": None,
+                "thread_id": None,
+            }
         ]
 
         response = self.client.get("/api/logs/recent?limit=10")
@@ -171,11 +182,14 @@ class TestLogsAPI:
         """测试搜索日志"""
         mock_service.search_logs.return_value = {
             "entries": [
-                LogEntry(
-                    timestamp="2025-10-10T10:00:00",
-                    level="INFO",
-                    message="Download completed: anime.mkv"
-                ).dict()
+                {
+                    "timestamp": "2025-10-10T10:00:00",
+                    "level": "INFO",
+                    "message": "Download completed: anime.mkv",
+                    "module": None,
+                    "line_number": None,
+                    "thread_id": None,
+                }
             ],
             "total": 1,
             "has_more": False
@@ -188,11 +202,46 @@ class TestLogsAPI:
         assert data["total"] == 1
         assert "download" in data["entries"][0]["message"].lower()
 
-    def test_stream_logs_endpoint(self):
-        """测试日志流端点存在性"""
-        response = self.client.get("/api/logs/stream")
-        # 这个端点返回SSE流，状态码应该是200
-        assert response.status_code == 200
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.logs.log_service')
+    async def test_stream_logs_endpoint(self, mock_service):
+        """测试实时日志流端点返回SSE数据"""
+
+        async def fake_stream_log_entries(*_, **__):
+            yield LogEntry(
+                timestamp="2025-10-10T10:10:00",
+                level="INFO",
+                message="Tail event",
+                module=None,
+                line_number=None,
+                thread_id=None,
+            )
+
+        mock_service.get_log_file_path.return_value = Path("app.log")
+        mock_service.stream_log_entries.return_value = fake_stream_log_entries()
+
+        with self.client.stream("GET", "/api/logs/stream?file=app.log&poll_interval=0.1") as response:
+            assert response.status_code == 200
+            lines = []
+            for raw_line in response.iter_lines():
+                text_line = raw_line.decode() if isinstance(raw_line, bytes) else raw_line
+                lines.append(text_line)
+                if text_line.startswith("data: "):
+                    assert "Tail event" in text_line
+                    break
+
+        assert any(line.startswith("retry:") for line in lines)
+        mock_service.stream_log_entries.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.logs.log_service')
+    async def test_stream_logs_file_not_found(self, mock_service):
+        """测试实时日志流端点文件不存在错误"""
+        mock_service.get_log_file_path.return_value = None
+
+        response = self.client.get("/api/logs/stream?file=missing.log")
+
+        assert response.status_code == 404
 
 
 class TestConfigAPI:
@@ -418,7 +467,7 @@ class TestErrorHandling:
         """测试无效JSON请求"""
         response = self.client.post(
             "/api/config/validate",
-            data="invalid json",
+            content=b"invalid json",
             headers={"content-type": "application/json"}
         )
 
@@ -447,7 +496,8 @@ class TestAPIResponseFormat:
             uptime="1:00:00",
             cpu_usage=50.0,
             memory_usage=60.0,
-            disk_usage=70.0
+            disk_usage=70.0,
+            version="0.5.5"
         )
 
         response = self.client.get("/api/system/status")
@@ -481,17 +531,26 @@ def create_test_log_entries():
         LogEntry(
             timestamp="2025-10-10T10:00:00",
             level="INFO",
-            message="Application started"
+            message="Application started",
+            module=None,
+            line_number=None,
+            thread_id=None,
         ),
         LogEntry(
             timestamp="2025-10-10T10:01:00",
             level="WARNING",
-            message="High CPU usage detected"
+            message="High CPU usage detected",
+            module=None,
+            line_number=None,
+            thread_id=None,
         ),
         LogEntry(
             timestamp="2025-10-10T10:02:00",
             level="ERROR",
-            message="Failed to connect to database"
+            message="Failed to connect to database",
+            module=None,
+            line_number=None,
+            thread_id=None,
         )
     ]
 

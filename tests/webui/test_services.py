@@ -279,6 +279,32 @@ class TestLogService:
                     assert "connection" in entry["message"].lower()
 
     @pytest.mark.asyncio
+    async def test_stream_log_entries(self, tmp_path):
+        """测试实时日志流功能"""
+        log_dir = tmp_path
+        log_file = log_dir / "stream.log"
+        log_file.write_text("")
+
+        service = LogService(log_dir=str(log_dir))
+
+        async def append_line():
+            await asyncio.sleep(0.05)
+            line = "2025-10-10T10:00:00 | INFO | Tail message generated"
+            with log_file.open("a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+
+        producer = asyncio.create_task(append_line())
+        stream = service.stream_log_entries(log_file.name, poll_interval=0.01)
+
+        entry = await asyncio.wait_for(anext(stream), timeout=1.0)
+
+        await stream.aclose()
+        await producer
+
+        assert entry.level == "INFO"
+        assert "Tail message" in entry.message
+
+    @pytest.mark.asyncio
     async def test_get_recent_logs(self, log_service, sample_log_file):
         """测试获取最近日志"""
         with patch.object(log_service, 'log_dir', Path(tempfile.gettempdir())):
@@ -601,11 +627,14 @@ class TestServiceIntegration:
              patch.object(system_service, 'get_system_status') as mock_status:
 
             mock_logs.return_value = [
-                LogEntry(
-                    timestamp="2025-10-10T10:00:00",
-                    level="INFO",
-                    message="System started"
-                ).dict()
+                {
+                    "timestamp": "2025-10-10T10:00:00",
+                    "level": "INFO",
+                    "message": "System started",
+                    "module": None,
+                    "line_number": None,
+                    "thread_id": None
+                }
             ]
 
             mock_status.return_value = SystemStatus(
@@ -613,7 +642,8 @@ class TestServiceIntegration:
                 uptime="1:00:00",
                 cpu_usage=50.0,
                 memory_usage=60.0,
-                disk_usage=70.0
+                disk_usage=70.0,
+                version="0.5.5"
             )
 
             # 获取系统状态
