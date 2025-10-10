@@ -16,7 +16,12 @@
       "mcp__spec-workflow__steering-guide",
       "Bash(tree:*)",
       "Bash(mkdir:*)",
-      "mcp__spec-workflow__spec-workflow-guide"
+      "mcp__spec-workflow__spec-workflow-guide",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "mcp__spec-workflow__spec-status",
+      "Bash(dir:*)",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": [

@@ -1,0 +1,57 @@
+alist:
+  base_url: http://127.0.0.1:5244
+  convert_torrent_to_magnet: true
+  download_path: Quark/
+  downloader: aria2
+  token: openlist-5ca3fdf7-4ac5-459d-be2c-74af8c80d7bdDJA1W6EOKr3SzE3heRZBuIyAtJNG7esT8oONnQw77cEkdBQbp3U4V22mRrMFb2lN
+common:
+  http_proxy: ''
+  https_proxy: ''
+  interval_time: 86400
+  log_level: INFO
+  proxies: {}
+dev:
+  log_level: INFO
+mikan:
+  filter: 简体
+  filters:
+  - 简体
+  regex_pattern:
+    1080p: (X1080|1080P)
+    简体: (简体|简中|简日|CHS)
+    繁体: (繁体|繁中|繁日|CHT|Baha)
+    非合集: ^(?!.*(\d{2}-\d{2}|合集)).*
+  subscribe_url:
+  - https://mikanani.kas.pub/RSS/MyBangumi?token=oxMwDoouV18rOBaL3bqjmoi3alE5UjdMuhgqgTTp5Hc%3d
+  - https://mikanani.kas.pub/RSS/Bangumi?bangumiId=3695&subgroupid=203
+notification:
+  pushplus:
+    enable: false
+    token: ''
+  telegram:
+    bot_token: ''
+    chat_id: ''
+    enable: false
+rename:
+  api_key: ''
+  enable: false
+  extractor:
+    api_key: 0d38fadd5764430ea08742b7bbccb8eb.hOmKt0tOeomD1qTH
+    base_url: https://open.bigmodel.cn/api/paas/v4/
+    extractor_type: openai
+    model: glm-4-flash
+    output_type: json_object
+  extractor_type: openai
+  model: ''
+  remap:
+    cfg_path: remap.yaml
+    enable: false
+  rename_format: '{name} S{season:02d}E{episode:02d}'
+webdav:
+  fixer_conflict_strategy: overwrite
+  fixer_execute_mode: true
+  fixer_recursive_scan: true
+  password: '1234'
+  timeout: 30
+  url: http://127.0.0.1:5244/dav
+  username: admin

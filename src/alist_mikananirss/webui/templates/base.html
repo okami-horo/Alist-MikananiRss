@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Alist-MikananiRss WebUI{% endblock %}</title>
+
+    <!-- CSS框架 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- 自定义样式 -->
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-bg: #1e293b;
+            --light-bg: #f8fafc;
+            --border-color: #e2e8f0;
+        }
+
+        [data-theme="dark"] {
+            --bs-body-bg: var(--dark-bg);
+            --bs-body-color: #f1f5f9;
+            --bs-border-color: #334155;
+            --card-bg: #334155;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.25rem;
+        }
+
+        .sidebar {
+            min-height: calc(100vh - 56px);
+            background: var(--bs-body-bg);
+            border-right: 1px solid var(--bs-border-color);
+            transition: all 0.3s ease;
+        }
+
+        .main-content {
+            min-height: calc(100vh - 56px);
+            background: var(--bs-body-bg);
+        }
+
+        .nav-link {
+            color: var(--bs-body-color);
+            padding: 0.75rem 1rem;
+            margin: 0.25rem 0;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link:hover {
+            background: var(--bs-gray-100);
+            color: var(--primary-color);
+        }
+
+        .nav-link.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .card {
+            background: var(--card-bg, var(--bs-card-bg));
+            border: 1px solid var(--bs-border-color);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        .status-running {
+            background: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        .status-stopped {
+            background: var(--danger-color);
+        }
+
+        .status-warning {
+            background: var(--warning-color);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .log-container {
+            background: #1e293b;
+            color: #e2e8f0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.875rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            margin-bottom: 0.25rem;
+            padding: 0.25rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .log-level-DEBUG { color: #94a3b8; }
+        .log-level-INFO { color: #22d3ee; }
+        .log-level-WARNING { color: #fbbf24; }
+        .log-level-ERROR { color: #f87171; }
+        .log-level-CRITICAL { color: #dc2626; font-weight: bold; }
+
+        .btn-theme-toggle {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .btn-theme-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: -250px;
+                z-index: 1050;
+                transition: left 0.3s ease;
+            }
+
+            .sidebar.show {
+                left: 0;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .mobile-menu-toggle {
+                display: block;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .mobile-menu-toggle {
+                display: none;
+            }
+        }
+
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bs-gray-100);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bs-gray-400);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--bs-gray-500);
+        }
+
+        [data-theme="dark"] ::-webkit-scrollbar-track {
+            background: #334155;
+        }
+
+        [data-theme="dark"] ::-webkit-scrollbar-thumb {
+            background: #64748b;
+        }
+
+        [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body data-theme="light">
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container-fluid">
+            <button class="btn btn-outline-light mobile-menu-toggle" id="mobileMenuToggle">
+                <i class="bi bi-list"></i>
+            </button>
+
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-controller me-2"></i>
+                Alist-MikananiRss
+            </a>
+
+            <div class="navbar-nav ms-auto">
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="themeDropdown" role="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-palette me-1"></i>
+                        主题
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('light')">
+                            <i class="bi bi-sun me-2"></i>浅色
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('dark')">
+                            <i class="bi bi-moon me-2"></i>深色
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setTheme('auto')">
+                            <i class="bi bi-circle-half me-2"></i>自动
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 侧边栏 -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar" id="sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/dashboard" id="nav-dashboard">
+                                <i class="bi bi-speedometer2 me-2"></i>
+                                仪表板
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/logs" id="nav-logs">
+                                <i class="bi bi-file-text me-2"></i>
+                                日志查看
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/config" id="nav-config">
+                                <i class="bi bi-gear me-2"></i>
+                                配置管理
+                            </a>
+                        </li>
+                    </ul>
+
+                    <hr class="my-3">
+
+                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <span>系统</span>
+                    </h6>
+                    <ul class="nav flex-column mb-2">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/api/docs" target="_blank">
+                                <i class="bi bi-book me-2"></i>
+                                API文档
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showSystemInfo()">
+                                <i class="bi bi-info-circle me-2"></i>
+                                系统信息
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- 主内容区域 -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 main-content">
+                <div class="p-4">
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 主题切换按钮 -->
+    <button class="btn-theme-toggle" id="themeToggle" onclick="toggleTheme()">
+        <i class="bi bi-moon-stars"></i>
+    </button>
+
+    <!-- JavaScript库 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- 通用JavaScript -->
+    <script>
+        // 主题管理
+        const THEMES = {
+            LIGHT: 'light',
+            DARK: 'dark',
+            AUTO: 'auto'
+        };
+
+        function getStoredTheme() {
+            return localStorage.getItem('theme') || THEMES.LIGHT;
+        }
+
+        function setPreferredTheme(theme) {
+            if (theme === THEMES.AUTO) {
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                document.body.setAttribute('data-theme', prefersDark ? THEMES.DARK : THEMES.LIGHT);
+            } else {
+                document.body.setAttribute('data-theme', theme);
+            }
+            localStorage.setItem('theme', theme);
+            updateThemeIcon(theme);
+        }
+
+        function setTheme(theme) {
+            setPreferredTheme(theme);
+            event.preventDefault();
+        }
+
+        function toggleTheme() {
+            const currentTheme = getStoredTheme();
+            const newTheme = currentTheme === THEMES.LIGHT ? THEMES.DARK : THEMES.LIGHT;
+            setPreferredTheme(newTheme);
+        }
+
+        function updateThemeIcon(theme) {
+            const icon = document.querySelector('#themeToggle i');
+            if (theme === THEMES.DARK) {
+                icon.className = 'bi bi-sun';
+            } else {
+                icon.className = 'bi bi-moon-stars';
+            }
+        }
+
+        // 初始化主题
+        document.addEventListener('DOMContentLoaded', function() {
+            const storedTheme = getStoredTheme();
+            setPreferredTheme(storedTheme);
+        });
+
+        // 监听系统主题变化
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+            if (getStoredTheme() === THEMES.AUTO) {
+                setPreferredTheme(THEMES.AUTO);
+            }
+        });
+
+        // 移动端菜单管理
+        document.getElementById('mobileMenuToggle').addEventListener('click', function() {
+            document.getElementById('sidebar').classList.toggle('show');
+        });
+
+        // 点击外部关闭移动端菜单
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('mobileMenuToggle');
+
+            if (window.innerWidth <= 768 &&
+                !sidebar.contains(event.target) &&
+                !toggle.contains(event.target)) {
+                sidebar.classList.remove('show');
+            }
+        });
+
+        // 通用API调用函数
+        async function apiCall(url, options = {}) {
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            };
+
+            const response = await fetch(url, { ...defaultOptions, ...options });
+
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            }
+
+            return response.json();
+        }
+
+        // 通知系统
+        function showNotification(message, type = 'info', duration = 5000) {
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            notification.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 300px;';
+            notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, duration);
+        }
+
+        // 确认对话框
+        function confirmAction(message, callback) {
+            if (confirm(message)) {
+                callback();
+            }
+        }
+
+        // 格式化时间
+        function formatTime(timestamp) {
+            return new Date(timestamp).toLocaleString('zh-CN');
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 显示加载状态
+        function showLoading(element, text = '加载中...') {
+            element.innerHTML = `
+                <div class="text-center">
+                    <div class="loading-spinner"></div>
+                    <span class="ms-2">${text}</span>
+                </div>
+            `;
+        }
+
+        // 显示错误信息
+        function showError(element, message) {
+            element.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    ${message}
+                </div>
+            `;
+        }
+
+        // 系统信息显示
+        async function showSystemInfo() {
+            try {
+                const info = await apiCall('/api/system/status');
+                const modal = new bootstrap.Modal(document.getElementById('systemInfoModal'));
+
+                document.getElementById('systemInfoContent').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>应用信息</h6>
+                            <p><strong>版本:</strong> ${info.version || '0.5.5'}</p>
+                            <p><strong>运行时间:</strong> ${info.uptime || 'N/A'}</p>
+                            <p><strong>状态:</strong>
+                                <span class="status-indicator ${info.status === 'running' ? 'status-running' : 'status-stopped'}"></span>
+                                ${info.status || 'Unknown'}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>系统资源</h6>
+                            <p><strong>CPU使用率:</strong> ${info.cpu_usage || 'N/A'}%</p>
+                            <p><strong>内存使用:</strong> ${info.memory_usage || 'N/A'}%</p>
+                            <p><strong>磁盘使用:</strong> ${info.disk_usage || 'N/A'}%</p>
+                        </div>
+                    </div>
+                `;
+
+                modal.show();
+            } catch (error) {
+                showNotification('获取系统信息失败: ' + error.message, 'danger');
+            }
+        }
+
+        // 页面导航高亮
+        function setActiveNav(page) {
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+
+            const activeNav = document.getElementById(`nav-${page}`);
+            if (activeNav) {
+                activeNav.classList.add('active');
+            }
+        }
+
+        // 自动刷新功能
+        let refreshInterval = null;
+
+        function startAutoRefresh(callback, interval = 30000) {
+            stopAutoRefresh();
+            callback(); // 立即执行一次
+            refreshInterval = setInterval(callback, interval);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+
+        // 页面卸载时清理
+        window.addEventListener('beforeunload', function() {
+            stopAutoRefresh();
+        });
+    </script>
+
+    <!-- 系统信息模态框 -->
+    <div class="modal fade" id="systemInfoModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">系统信息</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                <div class="modal-body" id="systemInfoContent">
+                    <div class="text-center">
+                        <div class="loading-spinner"></div>
+                        <p class="mt-2">加载中...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

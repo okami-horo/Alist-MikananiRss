@@ -134,74 +134,52 @@ async def run_webdav_fix(args, cfg):
         await alist_client.close()
 
 
-async def run():
-    parser = argparse.ArgumentParser(description="Alist Mikanani RSS 工具集")
-    subparsers = parser.add_subparsers(dest='command', help='可用命令')
+async def run_webui(args, cfg):
+    """运行WebUI服务器"""
+    logger.info("启动WebUI服务器")
 
-    # RSS监控命令（默认）
-    monitor_parser = subparsers.add_parser('monitor', help='启动RSS监控（默认命令）')
-    monitor_parser.add_argument(
-        "--config",
-        default="config.yaml",
-        help="配置文件路径",
-    )
+    try:
+        import uvicorn
+        from alist_mikananirss.webui.server import app
 
-    # WebDAV修复命令
-    webdav_parser = subparsers.add_parser('webdav-fix', help='修复WebDAV嵌套目录结构')
-    webdav_parser.add_argument(
-        "--config", "-c",
-        default="config.yaml",
-        help="配置文件路径",
-    )
-    webdav_parser.add_argument(
-        "--dir", "-d",
-        default=None,
-        help="指定要处理的目录路径（如果未指定，将使用配置文件中的download_path）",
-    )
-    webdav_parser.add_argument(
-        "--force", "-f",
-        action="store_true",
-        help="执行实际操作（默认为预览模式，或使用配置文件中的execute_mode设置）",
-    )
-    webdav_parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="显示详细输出",
-    )
-    webdav_parser.add_argument(
-        "--recursive", "-r",
-        action="store_true",
-        help="递归扫描子目录（默认使用配置文件中的recursive_scan设置）",
-    )
-    webdav_parser.add_argument(
-        "--conflicts", "-C",
-        choices=["skip", "rename", "overwrite"],
-        default=None,
-        help="冲突处理策略 (skip|rename|overwrite，默认使用配置文件中的conflict_strategy设置)",
-    )
+        # 优先使用命令行参数，其次使用配置文件
+        host = args.host if hasattr(args, 'host') and args.host else cfg.webui.host
+        port = args.port if hasattr(args, 'port') and args.port else cfg.webui.port
+        debug = args.verbose if hasattr(args, 'verbose') else cfg.webui.debug
 
-    args = parser.parse_args()
+        # 设置Uvicorn配置
+        config = uvicorn.Config(
+            app=app,
+            host=host,
+            port=port,
+            log_level="info" if debug else "warning",
+            access_log=debug,
+            reload=debug  # 调试模式下启用热重载
+        )
 
-    # 如果没有指定命令，默认启动监控（向后兼容）
-    if args.command is None:
-        args.command = 'monitor'
-        # 为monitor命令创建默认args
-        args.config = getattr(args, 'config', 'config.yaml')
+        server = uvicorn.Server(config)
 
-    cfg_manager = ConfigManager()
-    cfg = cfg_manager.load_config(args.config)
-    # logger
-    init_logging(cfg)
+        logger.info(f"WebUI服务器启动成功: http://{host}:{port}")
+        if debug:
+            logger.info("调试模式已启用，支持热重载")
+        logger.info("按 Ctrl+C 停止服务器")
 
-    logger.info("Loaded config Successfully")
-    logger.info(f"Config: \n{cfg}")
+        await server.serve()
 
-    # 根据命令执行不同功能
-    if args.command == 'webdav-fix':
-        # WebDAV修复功能
-        return await run_webdav_fix(args, cfg)
+    except ImportError:
+        logger.error("WebUI依赖未安装，请安装: pip install fastapi uvicorn jinja2 python-multipart")
+        return False
+    except Exception as e:
+        logger.error(f"WebUI服务器启动失败: {str(e)}")
+        return False
 
-    # RSS监控功能（默认或monitor命令）
+    return True
+
+
+async def run_monitor_only(args, cfg):
+    """仅运行RSS监控功能（原有逻辑）"""
+    logger.info("启动RSS监控功能")
+
     # proxy
     init_proxies(cfg)
 
@@ -309,6 +287,107 @@ async def run():
         await alist_client.close()
         if cfg.bot_assistant.enable:
             await bot_assistant.stop()
+
+
+async def run():
+    parser = argparse.ArgumentParser(description="Alist Mikanani RSS 工具集")
+    subparsers = parser.add_subparsers(dest='command', help='可用命令')
+
+    # RSS监控命令（默认）
+    monitor_parser = subparsers.add_parser('monitor', help='启动RSS监控（默认命令）')
+    monitor_parser.add_argument(
+        "--config",
+        default="config.yaml",
+        help="配置文件路径",
+    )
+
+    # WebUI命令
+    webui_parser = subparsers.add_parser('webui', help='启动WebUI服务器')
+    webui_parser.add_argument(
+        "--config", "-c",
+        default="config.yaml",
+        help="配置文件路径",
+    )
+    webui_parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="WebUI服务器绑定地址 (默认: 0.0.0.0)",
+    )
+    webui_parser.add_argument(
+        "--port", "-p",
+        type=int,
+        default=8080,
+        help="WebUI服务器端口 (默认: 8080)",
+    )
+    webui_parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="启用详细日志输出",
+    )
+
+    # WebDAV修复命令
+    webdav_parser = subparsers.add_parser('webdav-fix', help='修复WebDAV嵌套目录结构')
+    webdav_parser.add_argument(
+        "--config", "-c",
+        default="config.yaml",
+        help="配置文件路径",
+    )
+    webdav_parser.add_argument(
+        "--dir", "-d",
+        default=None,
+        help="指定要处理的目录路径（如果未指定，将使用配置文件中的download_path）",
+    )
+    webdav_parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="执行实际操作（默认为预览模式，或使用配置文件中的execute_mode设置）",
+    )
+    webdav_parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="显示详细输出",
+    )
+    webdav_parser.add_argument(
+        "--recursive", "-r",
+        action="store_true",
+        help="递归扫描子目录（默认使用配置文件中的recursive_scan设置）",
+    )
+    webdav_parser.add_argument(
+        "--conflicts", "-C",
+        choices=["skip", "rename", "overwrite"],
+        default=None,
+        help="冲突处理策略 (skip|rename|overwrite，默认使用配置文件中的conflict_strategy设置)",
+    )
+
+    args = parser.parse_args()
+
+    # 如果没有指定命令，默认启动监控（向后兼容）
+    if args.command is None:
+        args.command = 'monitor'
+        # 为monitor命令创建默认args
+        args.config = getattr(args, 'config', 'config.yaml')
+
+    cfg_manager = ConfigManager()
+    cfg = cfg_manager.load_config(args.config)
+    # logger
+    init_logging(cfg)
+
+    logger.info("Loaded config Successfully")
+    logger.info(f"Config: \n{cfg}")
+
+    # 根据命令执行不同功能
+    if args.command == 'webdav-fix':
+        # WebDAV修复功能
+        return await run_webdav_fix(args, cfg)
+    elif args.command == 'webui':
+        # WebUI服务器功能
+        return await run_webui(args, cfg)
+    elif args.command == 'monitor':
+        # RSS监控功能（默认或monitor命令）
+        return await run_monitor_only(args, cfg)
+    else:
+        # 默认启动监控（向后兼容）
+        return await run_monitor_only(args, cfg)
 
 
 def main():

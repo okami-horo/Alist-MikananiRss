@@ -68,3 +68,5 @@ Docker，源码运行等更多的运行方法详见[使用文档](https://github
 
   # 递归扫描
   uv run alist-mikananirss webdav-fix --dir "/115/TV/2025-10/" --recursive --force
+
+  .venv\Scripts\uvicorn src.alist_mikananirss.webui.server:app --host 127.0.0.1 --port 8080

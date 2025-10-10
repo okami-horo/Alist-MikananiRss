@@ -1,0 +1,513 @@
+{% extends "base.html" %}
+
+{% block title %}仪表板 - Alist-MikananiRss WebUI{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">
+            <i class="bi bi-speedometer2 me-2"></i>
+            系统仪表板
+        </h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <div class="btn-group me-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshDashboard()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    刷新
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAutoRefresh()">
+                    <i class="bi bi-play-circle me-1" id="autoRefreshIcon"></i>
+                    <span id="autoRefreshText">自动刷新</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统状态卡片 -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-activity text-primary fs-4"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-semibold">系统状态</div>
+                            <div class="text-muted" id="systemStatus">
+                                <div class="loading-spinner"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-cpu text-warning fs-4"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-semibold">CPU使用率</div>
+                            <div class="text-muted" id="cpuUsage">
+                                <div class="loading-spinner"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-memory text-info fs-4"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-semibold">内存使用</div>
+                            <div class="text-muted" id="memoryUsage">
+                                <div class="loading-spinner"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-hdd text-success fs-4"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-semibold">磁盘使用</div>
+                            <div class="text-muted" id="diskUsage">
+                                <div class="loading-spinner"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统控制和图表 -->
+    <div class="row">
+        <!-- 系统控制面板 -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-sliders me-2"></i>
+                        系统控制
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">主程序状态</label>
+                        <div class="d-grid gap-2" id="systemControls">
+                            <div class="text-center">
+                                <div class="loading-spinner"></div>
+                                <p class="mt-2">加载中...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="mb-3">
+                        <label class="form-label">快速操作</label>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-primary" onclick="restartSystem()">
+                                <i class="bi bi-arrow-repeat me-2"></i>
+                                重启系统
+                            </button>
+                            <button class="btn btn-outline-info" onclick="viewLogs()">
+                                <i class="bi bi-file-text me-2"></i>
+                                查看日志
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="openConfig()">
+                                <i class="bi bi-gear me-2"></i>
+                                编辑配置
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 资源使用图表 -->
+        <div class="col-md-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up me-2"></i>
+                        资源使用趋势
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="resourceChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最近活动 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clock-history me-2"></i>
+                        最近活动
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="recentActivities">
+                        <div class="text-center">
+                            <div class="loading-spinner"></div>
+                            <p class="mt-2">加载中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 确认对话框 -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmModalTitle">确认操作</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="confirmModalBody">
+                确定要执行此操作吗？
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmModalButton">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let resourceChart = null;
+    let autoRefreshEnabled = false;
+    let resourceData = {
+        labels: [],
+        cpu: [],
+        memory: [],
+        disk: []
+    };
+
+    // 页面初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        setActiveNav('dashboard');
+        initResourceChart();
+        loadDashboard();
+    });
+
+    // 初始化资源使用图表
+    function initResourceChart() {
+        const ctx = document.getElementById('resourceChart').getContext('2d');
+        resourceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: resourceData.labels,
+                datasets: [{
+                    label: 'CPU使用率 (%)',
+                    data: resourceData.cpu,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: '内存使用率 (%)',
+                    data: resourceData.memory,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: '磁盘使用率 (%)',
+                    data: resourceData.disk,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    },
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '时间'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    }
+                }
+            }
+        });
+    }
+
+    // 加载仪表板数据
+    async function loadDashboard() {
+        try {
+            await Promise.all([
+                loadSystemStatus(),
+                loadSystemControls(),
+                loadRecentActivities()
+            ]);
+        } catch (error) {
+            console.error('加载仪表板数据失败:', error);
+            showNotification('加载数据失败: ' + error.message, 'danger');
+        }
+    }
+
+    // 加载系统状态
+    async function loadSystemStatus() {
+        try {
+            const status = await apiCall('/api/system/status');
+
+            // 更新系统状态
+            document.getElementById('systemStatus').innerHTML = `
+                <span class="status-indicator ${status.status === 'running' ? 'status-running' : 'status-stopped'}"></span>
+                ${status.status === 'running' ? '运行中' : '已停止'}
+            `;
+
+            // 更新资源使用率
+            document.getElementById('cpuUsage').innerHTML = `${status.cpu_usage || 0}%`;
+            document.getElementById('memoryUsage').innerHTML = `${status.memory_usage || 0}%`;
+            document.getElementById('diskUsage').innerHTML = `${status.disk_usage || 0}%`;
+
+            // 更新图表数据
+            updateResourceChart(status);
+
+        } catch (error) {
+            document.getElementById('systemStatus').innerHTML = '<span class="text-danger">获取失败</span>';
+            document.getElementById('cpuUsage').innerHTML = '<span class="text-danger">N/A</span>';
+            document.getElementById('memoryUsage').innerHTML = '<span class="text-danger">N/A</span>';
+            document.getElementById('diskUsage').innerHTML = '<span class="text-danger">N/A</span>';
+        }
+    }
+
+    // 更新资源图表
+    function updateResourceChart(status) {
+        const now = new Date().toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+
+        // 保持最近20个数据点
+        if (resourceData.labels.length >= 20) {
+            resourceData.labels.shift();
+            resourceData.cpu.shift();
+            resourceData.memory.shift();
+            resourceData.disk.shift();
+        }
+
+        resourceData.labels.push(now);
+        resourceData.cpu.push(status.cpu_usage || 0);
+        resourceData.memory.push(status.memory_usage || 0);
+        resourceData.disk.push(status.disk_usage || 0);
+
+        resourceChart.update();
+    }
+
+    // 加载系统控制面板
+    async function loadSystemControls() {
+        try {
+            const status = await apiCall('/api/system/status');
+            const controlsDiv = document.getElementById('systemControls');
+
+            if (status.status === 'running') {
+                controlsDiv.innerHTML = `
+                    <button class="btn btn-success w-100 mb-2" onclick="stopSystem()">
+                        <i class="bi bi-stop-circle me-2"></i>
+                        停止主程序
+                    </button>
+                    <button class="btn btn-warning w-100" onclick="restartSystem()">
+                        <i class="bi bi-arrow-repeat me-2"></i>
+                        重启主程序
+                    </button>
+                `;
+            } else {
+                controlsDiv.innerHTML = `
+                    <button class="btn btn-primary w-100" onclick="startSystem()">
+                        <i class="bi bi-play-circle me-2"></i>
+                        启动主程序
+                    </button>
+                `;
+            }
+
+        } catch (error) {
+            document.getElementById('systemControls').innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    无法获取系统状态
+                </div>
+            `;
+        }
+    }
+
+    // 加载最近活动
+    async function loadRecentActivities() {
+        try {
+            const activities = await apiCall('/api/logs/recent?limit=10');
+            const activitiesDiv = document.getElementById('recentActivities');
+
+            if (activities.length === 0) {
+                activitiesDiv.innerHTML = '<p class="text-muted text-center">暂无最近活动</p>';
+                return;
+            }
+
+            activitiesDiv.innerHTML = activities.map(activity => `
+                <div class="d-flex align-items-start border-bottom py-2">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-${getActivityIcon(activity.level)} text-${getActivityColor(activity.level)}"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <div class="fw-semibold">${activity.message}</div>
+                        <small class="text-muted">${formatTime(activity.timestamp)}</small>
+                    </div>
+                </div>
+            `).join('');
+
+        } catch (error) {
+            document.getElementById('recentActivities').innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    无法加载最近活动
+                </div>
+            `;
+        }
+    }
+
+    // 获取活动图标
+    function getActivityIcon(level) {
+        const icons = {
+            'DEBUG': 'bug',
+            'INFO': 'info-circle',
+            'WARNING': 'exclamation-triangle',
+            'ERROR': 'x-circle',
+            'CRITICAL': 'fire'
+        };
+        return icons[level] || 'circle';
+    }
+
+    // 获取活动颜色
+    function getActivityColor(level) {
+        const colors = {
+            'DEBUG': 'secondary',
+            'INFO': 'info',
+            'WARNING': 'warning',
+            'ERROR': 'danger',
+            'CRITICAL': 'danger'
+        };
+        return colors[level] || 'secondary';
+    }
+
+    // 系统控制功能
+    async function startSystem() {
+        confirmAction('确定要启动主程序吗？', async () => {
+            try {
+                showNotification('正在启动主程序...', 'info');
+                await apiCall('/api/system/start', { method: 'POST' });
+                showNotification('主程序启动成功', 'success');
+                await loadDashboard();
+            } catch (error) {
+                showNotification('启动失败: ' + error.message, 'danger');
+            }
+        });
+    }
+
+    async function stopSystem() {
+        confirmAction('确定要停止主程序吗？', async () => {
+            try {
+                showNotification('正在停止主程序...', 'info');
+                await apiCall('/api/system/stop', { method: 'POST' });
+                showNotification('主程序停止成功', 'success');
+                await loadDashboard();
+            } catch (error) {
+                showNotification('停止失败: ' + error.message, 'danger');
+            }
+        });
+    }
+
+    async function restartSystem() {
+        confirmAction('确定要重启主程序吗？', async () => {
+            try {
+                showNotification('正在重启主程序...', 'info');
+                await apiCall('/api/system/restart', { method: 'POST' });
+                showNotification('主程序重启成功', 'success');
+                await loadDashboard();
+            } catch (error) {
+                showNotification('重启失败: ' + error.message, 'danger');
+            }
+        });
+    }
+
+    // 刷新仪表板
+    function refreshDashboard() {
+        loadDashboard();
+        showNotification('仪表板已刷新', 'info');
+    }
+
+    // 切换自动刷新
+    function toggleAutoRefresh() {
+        autoRefreshEnabled = !autoRefreshEnabled;
+        const icon = document.getElementById('autoRefreshIcon');
+        const text = document.getElementById('autoRefreshText');
+
+        if (autoRefreshEnabled) {
+            icon.className = 'bi bi-pause-circle me-1';
+            text.textContent = '停止自动刷新';
+            startAutoRefresh(loadDashboard, 30000); // 30秒刷新一次
+            showNotification('已开启自动刷新', 'success');
+        } else {
+            icon.className = 'bi bi-play-circle me-1';
+            text.textContent = '自动刷新';
+            stopAutoRefresh();
+            showNotification('已停止自动刷新', 'info');
+        }
+    }
+
+    // 快速操作
+    function viewLogs() {
+        window.location.href = '/logs';
+    }
+
+    function openConfig() {
+        window.location.href = '/config';
+    }
+</script>
+{% endblock %}

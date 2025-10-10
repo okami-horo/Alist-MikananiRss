@@ -11,6 +11,7 @@ from .basic import (
     MikanConfig,
     NotificationConfig,
     RenameConfig,
+    WebUIConfig,
     WebdavConfig,
 )
 
@@ -22,6 +23,7 @@ class AppConfig(BaseModel):
     notification: NotificationConfig = Field(default_factory=NotificationConfig)
     rename: RenameConfig = Field(default_factory=RenameConfig)
     webdav: WebdavConfig = Field(default_factory=WebdavConfig)
+    webui: WebUIConfig = Field(default_factory=WebUIConfig)
     bot_assistant: BotAssistantConfig = Field(default_factory=BotAssistantConfig)
     dev: DevConfig = Field(default_factory=DevConfig)
 
