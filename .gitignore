@@ -19,4 +19,4 @@ log/
 # debug file
 *.ipynb
 venv/
-.spec-workflow/approvals/steering/.snapshots
+.spec-workflow/approvals

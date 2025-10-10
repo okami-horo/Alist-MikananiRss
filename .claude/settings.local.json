@@ -15,7 +15,8 @@
       "Bash(git log:*)",
       "mcp__spec-workflow__steering-guide",
       "Bash(tree:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "mcp__spec-workflow__spec-workflow-guide"
     ],
     "deny": [],
     "ask": [
