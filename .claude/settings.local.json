@@ -12,9 +12,14 @@
       "Bash(uv:*)",
       "Bash(git checkout:*)",
       "Bash(cat:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "mcp__spec-workflow__steering-guide",
+      "Bash(tree:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [
+      "mcp__spec-workflow__approvals"
+    ]
   }
 }
