@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
+import json
 from collections.abc import Mapping
 from typing import Any, Optional
 from unittest.mock import Mock
@@ -139,11 +141,31 @@ async def search_logs(
 
 
 @router.get("/stream")
-async def stream_logs() -> StreamingResponse:
-    async def generator():
-        yield "retry: 10000\n\n"
+async def stream_logs(
+    file: str = Query(..., description="log file name to follow"),
+    poll_interval: float = Query(1.0, ge=0.1, le=5.0),
+) -> StreamingResponse:
+    path = await _resolve(log_service.get_log_file_path(file))
+    if path is None:
+        raise HTTPException(404, f"Log file '{file}' not found")
 
-    return StreamingResponse(generator(), media_type="text/event-stream")
+    async def event_stream():
+        yield "retry: 5000\n\n"
+        try:
+            async for entry in log_service.stream_log_entries(
+                file=file,
+                poll_interval=poll_interval,
+                start_at_end=True,
+            ):
+                payload = json.dumps(entry.model_dump())
+                yield f"data: {payload}\n\n"
+        except FileNotFoundError:
+            yield "event: end\n"
+            yield "data: {}\n\n"
+        except asyncio.CancelledError:  # pragma: no cover - connection cancelled
+            raise
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 __all__ = ["router", "log_service", "get_log_service"]

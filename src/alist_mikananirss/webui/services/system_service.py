@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import datetime
 import subprocess
+import sys
+import shutil
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -70,9 +72,10 @@ class SystemService:
             if self._is_main_process_running():
                 return {"success": False, "message": "System already running"}
 
+            python_executable = sys.executable or shutil.which("python") or "python"
             try:
                 process = subprocess.Popen(  # nosec B603 - launched intentionally for tests
-                    ["python", "-m", self.main_module],
+                    [python_executable, "-m", self.main_module],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -80,6 +83,14 @@ class SystemService:
                 self._managed_pid = getattr(process, "pid", None)
             except Exception as exc:  # pragma: no cover - defensive
                 return {"success": False, "message": f"Failed to start system: {exc}"}
+
+            await asyncio.sleep(0.2)
+            if process.poll() is not None:
+                self._managed_pid = None
+                return {
+                    "success": False,
+                    "message": f"System process exited immediately with code {process.returncode}",
+                }
 
             self._status = "running"
             self._start_time = datetime.datetime.now(datetime.timezone.utc)

@@ -28,6 +28,7 @@ dependencies = [
 
 [project.scripts]
 alist-mikananirss = "alist_mikananirss:main"
+alist-mikananirss-webui = "alist_mikananirss.webui.__main__:main"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]

@@ -1,3 +1,4 @@
+
 """Utility helpers for reading application log files for the WebUI."""
 
 from __future__ import annotations
@@ -5,7 +6,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import AsyncGenerator, Dict, List, Optional, Tuple
 
 from ..models import LogEntry, LogFileInfo
 
@@ -77,6 +78,61 @@ class LogService:
 
     def _get_log_file_path(self, file_name: str) -> Path:
         return self.log_dir / file_name
+
+    async def stream_log_entries(
+        self,
+        file: str,
+        poll_interval: float = 1.0,
+        start_at_end: bool = True,
+    ) -> AsyncGenerator[LogEntry, None]:
+        """Yield log entries as they are appended to the requested log file."""
+        path = self._get_log_file_path(file)
+        if not path.exists():
+            raise FileNotFoundError(file)
+
+        position = path.stat().st_size if start_at_end else 0
+
+        try:
+            while True:
+                if not path.exists():
+                    await asyncio.sleep(poll_interval)
+                    path = self._get_log_file_path(file)
+                    position = 0
+                    continue
+
+                size = path.stat().st_size
+                if size < position:
+                    position = 0
+
+                lines, position = await asyncio.to_thread(
+                    self._read_lines_from_position,
+                    path,
+                    position,
+                )
+
+                for line in lines:
+                    parsed = self._parse_log_line(line)
+                    if parsed:
+                        yield parsed
+
+                await asyncio.sleep(poll_interval)
+        except asyncio.CancelledError:  # pragma: no cover - cooperative cancellation
+            raise
+        except GeneratorExit:  # pragma: no cover - generator closed by caller
+            return
+
+    def _read_lines_from_position(self, path: Path, position: int) -> Tuple[List[str], int]:
+        """Read new lines from the file starting at the provided byte offset."""
+        lines: List[str] = []
+        new_position = position
+
+        with path.open("r", encoding="utf-8", errors="ignore") as handle:
+            handle.seek(position)
+            for raw_line in handle:
+                lines.append(raw_line.rstrip("\n"))
+            new_position = handle.tell()
+
+        return lines, new_position
 
     def _filter_entries(
         self,
