@@ -68,6 +68,7 @@ class TestSystemService:
              patch.object(system_service, '_is_main_process_running', return_value=False):
 
             mock_process = MagicMock()
+            mock_process.pid = 1234
             mock_popen.return_value = mock_process
 
             result = await system_service.start_system()
@@ -75,6 +76,7 @@ class TestSystemService:
             assert result["success"] is True
             assert "started" in result["message"].lower()
             mock_popen.assert_called_once()
+            assert system_service._managed_pid == 1234
 
     @pytest.mark.asyncio
     async def test_start_system_already_running(self, system_service):
@@ -89,13 +91,18 @@ class TestSystemService:
     @pytest.mark.asyncio
     async def test_stop_system(self, system_service):
         """测试停止系统"""
-        with patch.object(system_service, '_get_main_process', return_value=MagicMock()), \
+        mock_process = MagicMock()
+        mock_process.pid = 4567
+        system_service._managed_pid = mock_process.pid
+
+        with patch.object(system_service, '_get_main_process', return_value=mock_process), \
              patch.object(system_service, '_is_main_process_running', return_value=True):
 
             result = await system_service.stop_system()
 
             assert result["success"] is True
             assert "stopped" in result["message"].lower()
+            assert system_service._managed_pid is None
 
     @pytest.mark.asyncio
     async def test_stop_system_not_running(self, system_service):
@@ -139,6 +146,21 @@ class TestSystemService:
         """测试检查主进程运行状态（未运行）"""
         with patch('psutil.process_iter') as mock_iter:
             mock_iter.return_value = []
+
+            result = system_service._is_main_process_running()
+
+            assert result is False
+
+    def test_is_main_process_running_skips_webui(self, system_service):
+        """测试检查主进程时跳过WebUI进程"""
+        with patch('psutil.process_iter') as mock_iter:
+            mock_process = MagicMock()
+            mock_process.cmdline.return_value = [
+                "python",
+                "-m",
+                "src.alist_mikananirss.webui.server"
+            ]
+            mock_iter.return_value = [mock_process]
 
             result = system_service._is_main_process_running()
 

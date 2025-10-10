@@ -23,6 +23,7 @@ class SystemService:
         self._status: str = "stopped"
         self._start_time: Optional[datetime.datetime] = None
         self._lock = asyncio.Lock()
+        self._managed_pid: Optional[int] = None
 
     async def get_system_status(self) -> SystemStatus:
         """Return current status plus basic resource metrics."""
@@ -70,12 +71,13 @@ class SystemService:
                 return {"success": False, "message": "System already running"}
 
             try:
-                subprocess.Popen(  # nosec B603 - launched intentionally for tests
+                process = subprocess.Popen(  # nosec B603 - launched intentionally for tests
                     ["python", "-m", self.main_module],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
+                self._managed_pid = getattr(process, "pid", None)
             except Exception as exc:  # pragma: no cover - defensive
                 return {"success": False, "message": f"Failed to start system: {exc}"}
 
@@ -105,6 +107,7 @@ class SystemService:
 
             self._status = "stopped"
             self._start_time = None
+            self._managed_pid = None
             return {"success": True, "message": "System stopped"}
 
     async def restart_system(self) -> Dict[str, object]:
@@ -125,13 +128,18 @@ class SystemService:
 
     def _is_main_process_running(self) -> bool:
         """Return True if a process for the main module is found."""
+        if self._managed_pid:
+            try:
+                proc = psutil.Process(self._managed_pid)
+                if self._matches_target_process(proc.cmdline()):
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                self._managed_pid = None
+
         for process in psutil.process_iter(["cmdline"]):
             try:
-                if hasattr(process, "cmdline") and callable(process.cmdline):
-                    cmdline = process.cmdline() or []
-                else:
-                    cmdline = process.info.get("cmdline") or []
-                if any(self.main_module in str(part) for part in cmdline):
+                cmdline = self._safe_cmdline(process)
+                if self._matches_target_process(cmdline):
                     return True
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
@@ -139,13 +147,19 @@ class SystemService:
 
     def _get_main_process(self) -> Optional[psutil.Process]:
         """Locate the process running the main module."""
+        if self._managed_pid:
+            try:
+                proc = psutil.Process(self._managed_pid)
+                if self._matches_target_process(proc.cmdline()):
+                    return proc
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                self._managed_pid = None
+
         for process in psutil.process_iter(["cmdline"]):
             try:
-                if hasattr(process, "cmdline") and callable(process.cmdline):
-                    cmdline = process.cmdline() or []
-                else:
-                    cmdline = process.info.get("cmdline") or []
-                if any(self.main_module in str(part) for part in cmdline):
+                cmdline = self._safe_cmdline(process)
+                if self._matches_target_process(cmdline):
+                    self._managed_pid = process.pid
                     return process
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
@@ -160,6 +174,30 @@ class SystemService:
         delta = now - start_time
         total_seconds = int(delta.total_seconds())
         return str(datetime.timedelta(seconds=total_seconds))
+
+    @staticmethod
+    def _safe_cmdline(process: psutil.Process) -> list[str]:
+        """Return a process cmdline, handling attribute differences."""
+        if hasattr(process, "cmdline") and callable(process.cmdline):
+            return process.cmdline() or []
+        return process.info.get("cmdline") or []
+
+    def _matches_target_process(self, cmdline: list[str]) -> bool:
+        """Check if the provided cmdline belongs to the controlled service."""
+        if not cmdline:
+            return False
+
+        joined = " ".join(str(part) for part in cmdline).lower()
+        if not joined:
+            return False
+
+        # Skip WebUI / uvicorn processes to avoid terminating the WebUI itself
+        if "webui" in joined and "server" in joined:
+            return False
+        if "uvicorn" in joined:
+            return False
+
+        return self.main_module.lower() in joined
 
 
 _system_service: Optional[SystemService] = None
