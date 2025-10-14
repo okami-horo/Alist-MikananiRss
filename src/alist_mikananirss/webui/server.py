@@ -125,67 +125,13 @@ app = create_app()
 
 
 @app.get("/", response_class=HTMLResponse)
-async def root():
-    """根路径，返回默认页面"""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Alist-MikananiRss WebUI</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                margin: 0;
-                padding: 0;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .container {
-                text-align: center;
-                background: white;
-                padding: 2rem;
-                border-radius: 10px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            }
-            h1 { color: #333; margin-bottom: 1rem; }
-            p { color: #666; margin-bottom: 2rem; }
-            .links {
-                display: flex;
-                gap: 1rem;
-                justify-content: center;
-                flex-wrap: wrap;
-            }
-            .link {
-                padding: 0.75rem 1.5rem;
-                background: #007bff;
-                color: white;
-                text-decoration: none;
-                border-radius: 5px;
-                transition: background-color 0.3s;
-            }
-            .link:hover {
-                background: #0056b3;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>Alist-MikananiRss WebUI</h1>
-            <p>动漫下载管理系统Web界面</p>
-            <div class="links">
-                <a href="/api/docs" class="link">API文档</a>
-                <a href="/api/redoc" class="link">ReDoc文档</a>
-                <a href="/dashboard" class="link">仪表板</a>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+async def root(request: Request):
+    """根路径，直接返回仪表盘页面"""
+    templates = app.state.templates
+    if not templates:
+        return HTMLResponse(content="Template engine not available", status_code=500)
+
+    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
