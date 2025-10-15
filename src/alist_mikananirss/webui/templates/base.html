@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -107,8 +108,15 @@
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
         }
 
         .log-container {
@@ -128,11 +136,26 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .log-level-DEBUG { color: #94a3b8; }
-        .log-level-INFO { color: #22d3ee; }
-        .log-level-WARNING { color: #fbbf24; }
-        .log-level-ERROR { color: #f87171; }
-        .log-level-CRITICAL { color: #dc2626; font-weight: bold; }
+        .log-level-DEBUG {
+            color: #94a3b8;
+        }
+
+        .log-level-INFO {
+            color: #22d3ee;
+        }
+
+        .log-level-WARNING {
+            color: #fbbf24;
+        }
+
+        .log-level-ERROR {
+            color: #f87171;
+        }
+
+        .log-level-CRITICAL {
+            color: #dc2626;
+            font-weight: bold;
+        }
 
         .btn-theme-toggle {
             position: fixed;
@@ -165,7 +188,9 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .fade-in {
@@ -173,8 +198,15 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         /* 响应式设计 */
@@ -240,6 +272,7 @@
 
     {% block extra_css %}{% endblock %}
 </head>
+
 <body data-theme="light">
     <!-- 导航栏 -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
@@ -255,20 +288,21 @@
 
             <div class="navbar-nav ms-auto">
                 <div class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="themeDropdown" role="button" data-bs-toggle="dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="themeDropdown" role="button"
+                        data-bs-toggle="dropdown">
                         <i class="bi bi-palette me-1"></i>
                         主题
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="#" onclick="setTheme('light')">
-                            <i class="bi bi-sun me-2"></i>浅色
-                        </a></li>
+                                <i class="bi bi-sun me-2"></i>浅色
+                            </a></li>
                         <li><a class="dropdown-item" href="#" onclick="setTheme('dark')">
-                            <i class="bi bi-moon me-2"></i>深色
-                        </a></li>
+                                <i class="bi bi-moon me-2"></i>深色
+                            </a></li>
                         <li><a class="dropdown-item" href="#" onclick="setTheme('auto')">
-                            <i class="bi bi-circle-half me-2"></i>自动
-                        </a></li>
+                                <i class="bi bi-circle-half me-2"></i>自动
+                            </a></li>
                     </ul>
                 </div>
             </div>
@@ -305,7 +339,8 @@
 
                     <hr class="my-3">
 
-                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                    <h6
+                        class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
                         <span>系统</span>
                     </h6>
                     <ul class="nav flex-column mb-2">
@@ -404,13 +439,13 @@
         }
 
         // 初始化主题
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const storedTheme = getStoredTheme();
             setPreferredTheme(storedTheme);
         });
 
         // 监听系统主题变化
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
             if (getStoredTheme() === THEMES.AUTO) {
                 setPreferredTheme(THEMES.AUTO);
             }
@@ -430,13 +465,13 @@
         }
 
         if (mobileMenuToggle) {
-            mobileMenuToggle.addEventListener('click', function() {
+            mobileMenuToggle.addEventListener('click', function () {
                 toggleSidebar();
             });
         }
 
         if (sidebarBackdrop) {
-            sidebarBackdrop.addEventListener('click', function() {
+            sidebarBackdrop.addEventListener('click', function () {
                 sidebar.classList.remove('show');
                 sidebarBackdrop.classList.remove('show');
                 document.body.classList.remove('sidebar-open');
@@ -444,7 +479,7 @@
         }
 
         // 点击外部关闭移动端菜单
-        document.addEventListener('click', function(event) {
+        document.addEventListener('click', function (event) {
             if (window.innerWidth <= 768 &&
                 sidebar.classList.contains('show') &&
                 !sidebar.contains(event.target) &&
@@ -568,7 +603,8 @@
 
         // 页面导航高亮
         function setActiveNav(page) {
-            document.querySelectorAll('.nav-link').forEach(link => {
+            const sidebarLinks = document.querySelectorAll('#sidebar .nav-link');
+            sidebarLinks.forEach(link => {
                 link.classList.remove('active');
             });
 
@@ -599,7 +635,7 @@
         }
 
         // 页面卸载时清理
-        window.addEventListener('beforeunload', function() {
+        window.addEventListener('beforeunload', function () {
             stopAutoRefresh();
         });
     </script>
@@ -627,4 +663,5 @@
 
     {% block extra_js %}{% endblock %}
 </body>
+
 </html>
