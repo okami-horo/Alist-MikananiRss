@@ -354,6 +354,37 @@ body.sidebar-open {
     color: var(--webui-primary);
 }
 
+#recentActivities .recent-activity-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.recent-activity-message {
+    display: block;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.recent-activity-item {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+@media (max-width: 576px) {
+    /* Stack activity items on narrow screens to avoid overflow */
+    #recentActivities .recent-activity-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #recentActivities .recent-activity-content {
+        margin-left: 0 !important;
+    }
+}
+
 /* 选项卡样式 */
 .nav-tabs .nav-link {
     color: var(--webui-text-light);

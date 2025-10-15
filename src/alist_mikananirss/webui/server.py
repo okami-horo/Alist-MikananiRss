@@ -6,13 +6,14 @@ FastAPI应用主服务器
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator, Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
 from alist_mikananirss.webui.api.system import router as system_router
@@ -123,6 +124,8 @@ def setup_templates(app: FastAPI) -> Optional[Jinja2Templates]:
 # 创建应用实例
 app = create_app()
 
+FAVICON_PATH = Path(__file__).resolve().parent / "static" / "images" / "favicon.ico"
+
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -168,6 +171,14 @@ async def config(request: Request):
 async def health_check():
     """健康检查端点"""
     return {"status": "healthy", "service": "webui"}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """网站图标"""
+    if FAVICON_PATH.exists():
+        return FileResponse(FAVICON_PATH)
+    return Response(status_code=404)
 
 
 if __name__ == "__main__":
