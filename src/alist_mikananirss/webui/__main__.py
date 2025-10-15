@@ -8,7 +8,7 @@ import uvicorn
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the Alist-MikananiRss WebUI server.")
-    parser.add_argument("--host", default="127.0.0.1", help="Host address to bind (default: 127.0.0.1).")
+    parser.add_argument("--host", default="0.0.0.0", help="Host address to bind (default: 0.0.0.0).")
     parser.add_argument("--port", type=int, default=8080, help="TCP port to listen on (default: 8080).")
     parser.add_argument(
         "--reload",
