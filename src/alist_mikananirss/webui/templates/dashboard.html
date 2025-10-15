@@ -486,13 +486,13 @@
             }
 
             activitiesDiv.innerHTML = activities.map(activity => `
-                <div class="d-flex align-items-start border-bottom py-2">
+                <div class="recent-activity-item d-flex align-items-start border-bottom py-2">
                     <div class="flex-shrink-0">
                         <i class="bi bi-${getActivityIcon(activity.level)} text-${getActivityColor(activity.level)}"></i>
                     </div>
-                    <div class="flex-grow-1 ms-3">
-                        <div class="fw-semibold">${activity.message}</div>
-                        <small class="text-muted">${formatTime(activity.timestamp)}</small>
+                    <div class="recent-activity-content flex-grow-1 ms-3">
+                        <div class="fw-semibold recent-activity-message">${activity.message}</div>
+                        <small class="text-muted d-block">${formatTime(activity.timestamp)}</small>
                     </div>
                 </div>
             `).join('');
