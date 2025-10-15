@@ -5,28 +5,53 @@
 {% block content %}
 <div class="fade-in">
     <!-- 页面标题 -->
-    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">
-            <i class="bi bi-speedometer2 me-2"></i>
-            系统仪表板
-        </h1>
-        <div class="btn-toolbar mb-2 mb-md-0">
-            <div class="btn-group me-2">
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshDashboard()">
-                    <i class="bi bi-arrow-clockwise me-1"></i>
-                    刷新
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAutoRefresh()">
-                    <i class="bi bi-play-circle me-1" id="autoRefreshIcon"></i>
-                    <span id="autoRefreshText">自动刷新</span>
-                </button>
+    <div class="page-header border-bottom pt-3 pb-2 mb-3">
+        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
+            <div>
+                <h1 class="h2 mb-0">
+                    <i class="bi bi-speedometer2 me-2"></i>
+                    系统仪表板
+                </h1>
+                <p class="text-muted small mb-0 d-md-none">随时查看运行状态与近期活动</p>
+            </div>
+            <div class="d-flex gap-2 flex-md-row flex-column w-100 w-md-auto">
+                <div class="btn-toolbar d-none d-md-block">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshDashboard()">
+                            <i class="bi bi-arrow-clockwise me-1"></i>
+                            刷新
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAutoRefresh()">
+                            <i class="bi bi-play-circle me-1" id="autoRefreshIcon"></i>
+                            <span id="autoRefreshText">自动刷新</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="dropdown d-md-none">
+                    <button class="btn btn-outline-secondary btn-sm w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        快捷操作
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end w-100">
+                        <li>
+                            <button class="dropdown-item" type="button" onclick="refreshDashboard()">
+                                <i class="bi bi-arrow-clockwise me-2"></i>刷新
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item" type="button" onclick="toggleAutoRefresh()">
+                                <i class="bi bi-play-circle me-2" id="autoRefreshIconMobile"></i>
+                                <span id="autoRefreshTextMobile">自动刷新</span>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- 系统状态卡片 -->
-    <div class="row mb-4">
-        <div class="col-md-3 mb-3">
+    <div class="row row-cols-2 row-cols-md-4 g-3 mb-4">
+        <div class="col">
             <div class="card">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
@@ -44,7 +69,7 @@
             </div>
         </div>
 
-        <div class="col-md-3 mb-3">
+        <div class="col">
             <div class="card">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
@@ -62,7 +87,7 @@
             </div>
         </div>
 
-        <div class="col-md-3 mb-3">
+        <div class="col">
             <div class="card">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
@@ -80,7 +105,7 @@
             </div>
         </div>
 
-        <div class="col-md-3 mb-3">
+        <div class="col">
             <div class="card">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
@@ -102,7 +127,7 @@
     <!-- 系统控制和图表 -->
     <div class="row">
         <!-- 系统控制面板 -->
-        <div class="col-md-4 mb-4">
+        <div class="col-lg-4 mb-4">
             <div class="card h-100">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
@@ -145,7 +170,7 @@
         </div>
 
         <!-- 资源使用图表 -->
-        <div class="col-md-8 mb-4">
+        <div class="col-lg-8 mb-4 d-none d-lg-block">
             <div class="card h-100">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
@@ -155,6 +180,24 @@
                 </div>
                 <div class="card-body">
                     <canvas id="resourceChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 mb-4 d-lg-none">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up me-2"></i>
+                        资源使用概览
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="resourceSummary" class="row gy-3">
+                        <div class="col-12 text-center text-muted">
+                            <div class="loading-spinner"></div>
+                            <p class="mt-2 mb-0">加载中...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -223,7 +266,12 @@
 
     // 初始化资源使用图表
     function initResourceChart() {
-        const ctx = document.getElementById('resourceChart').getContext('2d');
+        const chartElement = document.getElementById('resourceChart');
+        if (!chartElement) {
+            return;
+        }
+
+        const ctx = chartElement.getContext('2d');
         resourceChart = new Chart(ctx, {
             type: 'line',
             data: {
@@ -304,9 +352,15 @@
             `;
 
             // 更新资源使用率
-            document.getElementById('cpuUsage').innerHTML = `${status.cpu_usage || 0}%`;
-            document.getElementById('memoryUsage').innerHTML = `${status.memory_usage || 0}%`;
-            document.getElementById('diskUsage').innerHTML = `${status.disk_usage || 0}%`;
+            const cpu = status.cpu_usage || 0;
+            const memory = status.memory_usage || 0;
+            const disk = status.disk_usage || 0;
+
+            document.getElementById('cpuUsage').innerHTML = `${cpu}%`;
+            document.getElementById('memoryUsage').innerHTML = `${memory}%`;
+            document.getElementById('diskUsage').innerHTML = `${disk}%`;
+
+            updateResourceSummary({ cpu, memory, disk });
 
             // 更新图表数据
             updateResourceChart(status);
@@ -316,6 +370,7 @@
             document.getElementById('cpuUsage').innerHTML = '<span class="text-danger">N/A</span>';
             document.getElementById('memoryUsage').innerHTML = '<span class="text-danger">N/A</span>';
             document.getElementById('diskUsage').innerHTML = '<span class="text-danger">N/A</span>';
+            updateResourceSummary();
         }
     }
 
@@ -340,7 +395,47 @@
         resourceData.memory.push(status.memory_usage || 0);
         resourceData.disk.push(status.disk_usage || 0);
 
-        resourceChart.update();
+        if (resourceChart) {
+            resourceChart.update();
+        }
+    }
+
+    function updateResourceSummary(metrics) {
+        const summaryContainer = document.getElementById('resourceSummary');
+        if (!summaryContainer) {
+            return;
+        }
+
+        if (!metrics) {
+            summaryContainer.innerHTML = `
+                <div class="col-12 text-center text-muted">
+                    <i class="bi bi-info-circle me-2"></i>
+                    暂无数据
+                </div>
+            `;
+            return;
+        }
+
+        summaryContainer.innerHTML = `
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">CPU 使用率</span>
+                    <span class="fw-semibold">${metrics.cpu}%</span>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">内存使用率</span>
+                    <span class="fw-semibold">${metrics.memory}%</span>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">磁盘使用率</span>
+                    <span class="fw-semibold">${metrics.disk}%</span>
+                </div>
+            </div>
+        `;
     }
 
     // 加载系统控制面板
@@ -487,15 +582,25 @@
         autoRefreshEnabled = !autoRefreshEnabled;
         const icon = document.getElementById('autoRefreshIcon');
         const text = document.getElementById('autoRefreshText');
+        const iconMobile = document.getElementById('autoRefreshIconMobile');
+        const textMobile = document.getElementById('autoRefreshTextMobile');
 
         if (autoRefreshEnabled) {
             icon.className = 'bi bi-pause-circle me-1';
             text.textContent = '停止自动刷新';
+            if (iconMobile && textMobile) {
+                iconMobile.className = 'bi bi-pause-circle me-2';
+                textMobile.textContent = '停止自动刷新';
+            }
             startAutoRefresh(loadDashboard, 30000); // 30秒刷新一次
             showNotification('已开启自动刷新', 'success');
         } else {
             icon.className = 'bi bi-play-circle me-1';
             text.textContent = '自动刷新';
+            if (iconMobile && textMobile) {
+                iconMobile.className = 'bi bi-play-circle me-2';
+                textMobile.textContent = '自动刷新';
+            }
             stopAutoRefresh();
             showNotification('已停止自动刷新', 'info');
         }

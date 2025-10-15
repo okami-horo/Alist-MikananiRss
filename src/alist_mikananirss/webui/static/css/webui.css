@@ -44,6 +44,10 @@ body {
     transition: var(--webui-transition);
 }
 
+body.sidebar-open {
+    overflow: hidden;
+}
+
 /* 导航栏增强 */
 .navbar-brand {
     font-weight: 700;
@@ -77,6 +81,10 @@ body {
     background-color: rgba(79, 70, 229, 0.05);
     border-bottom: 1px solid var(--webui-border-light);
     font-weight: 600;
+}
+
+.page-header {
+    background-color: transparent;
 }
 
 /* 按钮样式增强 */
@@ -188,6 +196,21 @@ body {
     color: white;
 }
 
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(15, 23, 42, 0.45);
+    z-index: 1040;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease;
+}
+
+.sidebar-backdrop.show {
+    opacity: 1;
+    visibility: visible;
+}
+
 /* 日志容器样式 */
 .log-container {
     background-color: #0f172a;
@@ -291,6 +314,44 @@ body {
 .pagination .page-item.active .page-link {
     background-color: var(--webui-primary);
     border-color: var(--webui-primary);
+}
+
+/* 移动端底部导航 */
+.mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background-color: var(--webui-bg-light);
+    border-top: 1px solid var(--webui-border-light);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1030;
+    box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.1);
+}
+
+.mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: var(--webui-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    gap: 0.25rem;
+}
+
+.mobile-nav-item i {
+    font-size: 1.25rem;
+}
+
+.mobile-nav-item.active,
+.mobile-nav-item:focus,
+.mobile-nav-item:hover {
+    color: var(--webui-primary);
 }
 
 /* 选项卡样式 */
@@ -410,11 +471,62 @@ code {
     .mobile-menu-toggle {
         display: block !important;
     }
+
+    #mainContent {
+        padding-bottom: 6rem;
+    }
+
+    .btn-theme-toggle {
+        bottom: 5.5rem;
+        right: 1rem;
+    }
+
+    .btn-toolbar .btn-group {
+        width: 100%;
+    }
+
+    .btn-toolbar .btn-group .btn {
+        flex: 1;
+    }
+
+    .card-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .card-header .card-title {
+        flex: 1 1 100%;
+    }
+
+    .nav-tabs {
+        gap: 0.25rem;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 0.25rem;
+    }
+
+    .nav-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-tabs .nav-link {
+        flex: 0 0 auto;
+    }
+
+    .log-container {
+        max-height: 420px;
+    }
 }
 
 @media (min-width: 769px) {
     .mobile-menu-toggle {
         display: none !important;
+    }
+
+    .mobile-bottom-nav {
+        display: none;
     }
 }
 
