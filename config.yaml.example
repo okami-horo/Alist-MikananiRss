@@ -8,7 +8,6 @@ alist:
   download_path: Onedrive/Anime # 修改为你的下载路径(Alist中的路径)
 
 webdav:
-  url: "http://192.168.31.37:5244/dav" # WebDAV服务器URL（通常是Alist地址 + /dav）
   username: "admin" # WebDAV用户名
   password: "your_password" # WebDAV密码，请修改为您的实际密码
   timeout: 60 # WebDAV请求超时时间（秒），对于115云等慢响应服务建议设置为60-120秒

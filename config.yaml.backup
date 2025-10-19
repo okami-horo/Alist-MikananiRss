@@ -12,7 +12,8 @@ common:
 mikan:
   filter: ''
   filters: []
-  subscribe_url: []
+  subscribe_url:
+  - https://mikanime.tv/RSS/MyBangumi?token=oxMwDoouV18rOBaL3bqjmoi3alE5UjdMuhgqgTTp5Hc%3d
 notification:
   pushplus:
     enable: false

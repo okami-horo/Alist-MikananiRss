@@ -57,8 +57,17 @@ class WebDAVNestedFixer:
         if url:
             self.url = url
         else:
-            # 默认值
-            self.url = "http://127.0.0.1:5244/dav"
+            derived_url = None
+            if config and hasattr(config, "alist") and hasattr(config.alist, "base_url"):
+                derived_url = config.alist.base_url
+            elif alist_client and hasattr(alist_client, "base_url"):
+                derived_url = getattr(alist_client, "base_url")
+
+            if derived_url:
+                self.url = f"{derived_url.rstrip('/')}/dav"
+            else:
+                # 默认值
+                self.url = "http://127.0.0.1:5244/dav"
 
         self.username = username or 'admin'
         self.password = password or ''

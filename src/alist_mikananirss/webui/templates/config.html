@@ -339,25 +339,22 @@
                     <div class="card mt-3">
                         <div class="card-body">
                             <form id="webdavForm">
+                                <p class="text-muted small">将使用 `Alist` 配置中的 `base_url` 自动拼接 `/dav` 作为 WebDAV 地址。</p>
+
                                 <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="webdav_url" class="form-label">WebDAV地址</label>
-                                        <input type="url" class="form-control" id="webdav_url" name="url" placeholder="http://192.168.1.1:5244/dav">
-                                        <div class="form-text">WebDAV服务的完整URL地址</div>
-                                    </div>
                                     <div class="col-md-6 mb-3">
                                         <label for="webdav_username" class="form-label">用户名</label>
                                         <input type="text" class="form-control" id="webdav_username" name="username" placeholder="admin">
                                         <div class="form-text">WebDAV登录用户名</div>
                                     </div>
-                                </div>
-
-                                <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label for="webdav_password" class="form-label">密码</label>
                                         <input type="password" class="form-control" id="webdav_password" name="password">
                                         <div class="form-text">WebDAV登录密码</div>
                                     </div>
+                                </div>
+
+                                <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label for="webdav_timeout" class="form-label">连接超时 (秒)</label>
                                         <input type="number" class="form-control" id="webdav_timeout" name="timeout" min="5" max="300" value="30">
