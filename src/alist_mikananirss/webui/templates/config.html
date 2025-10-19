@@ -554,21 +554,21 @@
         setFormData('mikanForm', data);
 
         // 填充订阅URL
-        if (data.subscribe_url && Array.isArray(data.subscribe_url)) {
-            const container = document.getElementById('subscribeUrls');
-            container.innerHTML = '';
-            data.subscribe_url.forEach(url => {
-                addSubscribeUrl(url);
-            });
+        const subscribeContainer = document.getElementById('subscribeUrls');
+        subscribeContainer.innerHTML = '';
+        if (Array.isArray(data.subscribe_url) && data.subscribe_url.length > 0) {
+            data.subscribe_url.forEach(url => addSubscribeUrl(url));
+        } else {
+            addSubscribeUrl();
         }
 
         // 填充过滤规则
-        if (data.filters && Array.isArray(data.filters)) {
-            const container = document.getElementById('filters');
-            container.innerHTML = '';
-            data.filters.forEach(filter => {
-                addFilter(filter);
-            });
+        const filterContainer = document.getElementById('filters');
+        filterContainer.innerHTML = '';
+        if (Array.isArray(data.filters) && data.filters.length > 0) {
+            data.filters.forEach(filter => addFilter(filter));
+        } else {
+            addFilter();
         }
     }
 
@@ -614,7 +614,11 @@
 
     // 移除订阅URL
     function removeSubscribeUrl(button) {
+        const container = document.getElementById('subscribeUrls');
         button.parentElement.remove();
+        if (container.children.length === 0) {
+            addSubscribeUrl();
+        }
     }
 
     // 添加过滤规则
@@ -636,7 +640,11 @@
 
     // 移除过滤规则
     function removeFilter(button) {
+        const container = document.getElementById('filters');
         button.parentElement.remove();
+        if (container.children.length === 0) {
+            addFilter();
+        }
     }
 
     // 切换重命名配置显示
