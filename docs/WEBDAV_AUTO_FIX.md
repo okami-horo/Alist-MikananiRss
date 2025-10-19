@@ -18,7 +18,6 @@ alist:
   download_path: Onedrive/Anime
 
 webdav:
-  url: "http://192.168.31.37:5244/dav"  # 您的Alist WebDAV地址
   username: "admin"
   password: "your_password"
 
@@ -67,7 +66,6 @@ webdav:
 ## 配置选项
 
 ### WebDAV配置 (config.yaml中的webdav部分)
-- **url**: WebDAV服务器URL
 - **username**: WebDAV用户名
 - **password**: WebDAV密码
 - **execute_mode**: `true`=实际执行, `false`=仅预览

@@ -88,11 +88,13 @@ async def run_webdav_fix(args, cfg):
         return False
 
     # 创建WebDAV修复器，使用配置文件中的WebDAV设置
+    webdav_url = f"{cfg.alist.base_url.rstrip('/')}/dav"
+
     try:
         fixer = WebDAVNestedFixer(
             alist_client=alist_client,
             verbose=args.verbose,
-            url=cfg.webdav.url,
+            url=webdav_url,
             username=cfg.webdav.username,
             password=cfg.webdav.password,
             config=cfg
@@ -196,10 +198,11 @@ async def run_monitor_only(args, cfg):
     webdav_fixer = None
     if cfg.webdav.fixer.enable:
         try:
+            webdav_url = f"{cfg.alist.base_url.rstrip('/')}/dav"
             webdav_fixer = WebDAVNestedFixer(
                 alist_client=alist_client,
                 verbose=False,  # 启动时不显示详细输出
-                url=cfg.webdav.url,
+                url=webdav_url,
                 username=cfg.webdav.username,
                 password=cfg.webdav.password,
                 config=cfg

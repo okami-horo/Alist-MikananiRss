@@ -162,22 +162,12 @@ class WebdavFixerConfig(BaseModel):
 
 class WebdavConfig(BaseModel):
     """WebDAV配置"""
-    url: str = Field(..., description="WebDAV服务器URL")
     username: str = Field(default="admin", description="WebDAV用户名")
-    password: str = Field(..., description="WebDAV密码")
+    password: str = Field(default="", description="WebDAV密码")
     timeout: int = Field(default=60, ge=1, le=600, description="WebDAV请求超时时间（秒）")
     fixer: WebdavFixerConfig = Field(
         default_factory=WebdavFixerConfig, description="WebDAV修复工具配置"
     )
-
-    @field_validator("url")
-    @classmethod
-    def validate_url(cls, url: str) -> str:
-        try:
-            HttpUrl(url)
-            return url
-        except ValueError:
-            raise ValueError(f"Invalid WebDAV URL: {url}")
 
 
 class WebUIConfig(BaseModel):
