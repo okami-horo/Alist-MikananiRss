@@ -603,7 +603,36 @@
 
     // 填充WebDAV配置
     function populateWebdavConfig(data) {
-        setFormData('webdavForm', data);
+        const form = document.getElementById('webdavForm');
+        if (!form) return;
+
+        ['username', 'password', 'timeout'].forEach(key => {
+            const input = form.querySelector(`[name="${key}"]`);
+            if (!input) return;
+            if (input.type === 'checkbox') {
+                input.checked = !!data[key];
+            } else if (data[key] !== undefined && data[key] !== null) {
+                input.value = data[key];
+            } else if (input.type !== 'password') {
+                input.value = '';
+            }
+        });
+
+        const fixer = data.fixer || {};
+        const enableInput = form.querySelector('#webdav_execute_mode');
+        if (enableInput) {
+            enableInput.checked = fixer.enable ?? fixer.execute_mode ?? false;
+        }
+
+        const recursiveInput = form.querySelector('#webdav_recursive_scan');
+        if (recursiveInput) {
+            recursiveInput.checked = fixer.recursive_scan ?? false;
+        }
+
+        const strategyInput = form.querySelector('#webdav_conflict_strategy');
+        if (strategyInput && fixer.conflict_strategy) {
+            strategyInput.value = fixer.conflict_strategy;
+        }
     }
 
     // 添加订阅URL
@@ -729,7 +758,25 @@
         };
 
         // WebDAV配置
-        config.webdav = getFormData('webdavForm');
+        const webdavRaw = getFormData('webdavForm');
+        const {
+            fixer_execute_mode = false,
+            fixer_recursive_scan = false,
+            fixer_conflict_strategy = 'skip',
+            ...webdavBase
+        } = webdavRaw;
+
+        config.webdav = {
+            ...(currentConfig.webdav || {}),
+            ...webdavBase,
+            fixer: {
+                ...(currentConfig.webdav?.fixer || {}),
+                enable: !!fixer_execute_mode,
+                execute_mode: !!fixer_execute_mode,
+                recursive_scan: !!fixer_recursive_scan,
+                conflict_strategy: fixer_conflict_strategy || 'skip'
+            }
+        };
 
         return config;
     }
