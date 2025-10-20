@@ -54,6 +54,7 @@ class TaskMonitor:
         self.running_tasks: list[AlistTask] = []
         self.task_resource_map: dict[AlistTask, ResourceInfo] = {}
         self._webdav_fix_enabled = enable_webdav_fix
+        self.enable_webdav_fix = enable_webdav_fix
         self.webdav_fixer = webdav_fixer
 
         self.lock = asyncio.Lock()
@@ -340,8 +341,7 @@ class TaskMonitor:
         """在所有下载任务完成后执行WebDAV嵌套目录修复（如果启用）"""
         try:
             # 检查全局是否启用webdav-fix
-            # 通过检查是否已有DownloadManager实例启用webdav-fix
-            if not hasattr(self, '_webdav_fix_enabled') or not self._webdav_fix_enabled:
+            if not getattr(self, 'enable_webdav_fix', False):
                 logger.debug("WebDAV修复功能未启用，跳过嵌套目录修复")
                 return
 

@@ -3,7 +3,7 @@ alist:
   convert_torrent_to_magnet: true
   download_path: 115/TV/2025-10
   downloader: 115 Cloud
-  token: openlist-5ca3fdf7-4ac5-459d-be2c-74af8c80d7bdDJA1W6EOKr3SzE3heRZBuIyAtJNG7esT8oONnQw77cEkdBQbp3U4V22mRrMFb2lN
+  token: alist-d3addd10-34d1-442f-a823-76d14c80915aPgOizrOj54rqOwFfq716fYk7Jo0kBBtd3IKFaPpsl1OZhHqqyu9mAgdrPGwLBv9R
 common:
   http_proxy: ''
   https_proxy: ''
