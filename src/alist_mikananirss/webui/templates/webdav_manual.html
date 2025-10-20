@@ -77,6 +77,10 @@
                             <i class="bi bi-play-circle me-2"></i>
                             执行手动修复
                         </button>
+                        <button type="button" class="btn btn-success" onclick="saveManualDefaults()">
+                            <i class="bi bi-save me-2"></i>
+                            保存为默认
+                        </button>
                         <button type="button" class="btn btn-outline-secondary" onclick="resetManualForm()">
                             <i class="bi bi-arrow-counterclockwise me-2"></i>
                             重置
@@ -140,6 +144,16 @@
         }
     }
 
+    function collectManualConfig() {
+        const rawPath = document.getElementById('manualTargetPath').value.trim();
+        return {
+            default_path: rawPath || (manualDefaults.default_path ? manualDefaults.default_path : null),
+            execute_mode: document.getElementById('manualExecuteMode').checked,
+            recursive_scan: document.getElementById('manualRecursiveScan').checked,
+            conflict_strategy: document.getElementById('manualConflictStrategy').value,
+        };
+    }
+
     function applyManualDefaults() {
         document.getElementById('manualTargetPath').value = manualDefaults.default_path || '';
         document.getElementById('manualExecuteMode').checked = manualDefaults.execute_mode;
@@ -157,6 +171,52 @@
         `;
     }
 
+    async function persistManualDefaults({ silent = false } = {}) {
+        const manualConfig = collectManualConfig();
+        const payload = {
+            webdav: {
+                manual: {
+                    default_path: manualConfig.default_path,
+                    execute_mode: manualConfig.execute_mode,
+                    recursive_scan: manualConfig.recursive_scan,
+                    conflict_strategy: manualConfig.conflict_strategy,
+                }
+            }
+        };
+
+        try {
+            await apiCall('/api/config/save', {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            });
+
+            manualDefaults = {
+                default_path: manualConfig.default_path || '',
+                execute_mode: manualConfig.execute_mode,
+                recursive_scan: manualConfig.recursive_scan,
+                conflict_strategy: manualConfig.conflict_strategy,
+            };
+
+            if (!silent) {
+                showNotification('默认参数已保存', 'success');
+            }
+        } catch (error) {
+            console.error('保存默认参数失败:', error);
+            if (!silent) {
+                showNotification('保存默认参数失败: ' + error.message, 'danger');
+            }
+            throw error;
+        }
+    }
+
+    async function saveManualDefaults() {
+        try {
+            await persistManualDefaults({ silent: false });
+        } catch (error) {
+            // 已在 persistManualDefaults 中处理通知
+        }
+    }
+
     async function triggerManualFix() {
         const button = document.getElementById('runManualFixButton');
         const path = document.getElementById('manualTargetPath').value.trim();
@@ -168,6 +228,8 @@
         button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>执行中...';
 
         try {
+            await persistManualDefaults({ silent: true });
+
             const payload = {
                 path: path || null,
                 execute_mode: executeMode,
