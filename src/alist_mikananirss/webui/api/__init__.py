@@ -10,9 +10,11 @@ WebUI API路由模块
 from .system import router as system_router
 from .logs import router as logs_router
 from .config import router as config_router
+from .webdav import router as webdav_router
 
 __all__ = [
     "system_router",
     "logs_router",
     "config_router",
+    "webdav_router",
 ]

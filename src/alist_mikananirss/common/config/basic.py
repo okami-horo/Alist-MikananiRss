@@ -160,6 +160,27 @@ class WebdavFixerConfig(BaseModel):
     )
 
 
+class WebdavManualFixConfig(BaseModel):
+    """WebDAV手动修复配置"""
+    enable: bool = Field(
+        default=True, description="是否允许手动触发修复"
+    )
+    default_path: str | None = Field(
+        default=None, description="手动修复的默认目标路径"
+    )
+    execute_mode: bool = Field(
+        default=False, description="是否实际执行修复操作（false=仅预览）"
+    )
+    recursive_scan: bool = Field(
+        default=True, description="是否递归扫描子目录"
+    )
+    conflict_strategy: str = Field(
+        default="skip",
+        pattern="^(skip|rename|overwrite)$",
+        description="手动修复的冲突处理策略"
+    )
+
+
 class WebdavConfig(BaseModel):
     """WebDAV配置"""
     username: str = Field(default="admin", description="WebDAV用户名")
@@ -167,6 +188,9 @@ class WebdavConfig(BaseModel):
     timeout: int = Field(default=60, ge=1, le=600, description="WebDAV请求超时时间（秒）")
     fixer: WebdavFixerConfig = Field(
         default_factory=WebdavFixerConfig, description="WebDAV修复工具配置"
+    )
+    manual: WebdavManualFixConfig = Field(
+        default_factory=WebdavManualFixConfig, description="WebDAV手动修复配置"
     )
 
 

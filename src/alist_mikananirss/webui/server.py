@@ -19,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 from alist_mikananirss.webui.api.system import router as system_router
 from alist_mikananirss.webui.api.logs import router as logs_router
 from alist_mikananirss.webui.api.config import router as config_router
+from alist_mikananirss.webui.api.webdav import router as webdav_router
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,12 @@ def setup_routers(app: FastAPI) -> None:
         tags=["Configuration"]
     )
 
+    app.include_router(
+        webdav_router,
+        prefix="/api/webdav",
+        tags=["WebDAV"]
+    )
+
 
 def setup_static_files(app: FastAPI) -> None:
     """配置静态文件服务"""
@@ -165,6 +172,16 @@ async def config(request: Request):
         return HTMLResponse(content="Template engine not available", status_code=500)
 
     return templates.TemplateResponse("config.html", {"request": request})
+
+
+@app.get("/webdav/manual", response_class=HTMLResponse)
+async def webdav_manual(request: Request):
+    """WebDAV手动修复页面"""
+    templates = app.state.templates
+    if not templates:
+        return HTMLResponse(content="Template engine not available", status_code=500)
+
+    return templates.TemplateResponse("webdav_manual.html", {"request": request})
 
 
 @app.get("/health")

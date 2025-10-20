@@ -374,6 +374,13 @@
                                     嵌套目录修复工具
                                 </h6>
 
+                                <div class="alert alert-info d-flex align-items-center" role="alert">
+                                    <i class="bi bi-lightning-charge-fill me-2"></i>
+                                    <div>
+                                        手动触发一次性修复已迁移至 <a href="/webdav/manual" class="alert-link">WebDAV修复</a> 页面。
+                                    </div>
+                                </div>
+
                                 <div class="row">
                                     <div class="col-md-4 mb-3">
                                         <div class="form-check form-switch">
@@ -403,6 +410,7 @@
                                         <div class="form-text">文件冲突时的处理策略</div>
                                     </div>
                                 </div>
+
                             </form>
                         </div>
                     </div>
@@ -633,6 +641,7 @@
         if (strategyInput && fixer.conflict_strategy) {
             strategyInput.value = fixer.conflict_strategy;
         }
+
     }
 
     // 添加订阅URL
@@ -841,32 +850,25 @@
 
     // 保存配置
     async function saveConfig() {
+        const config = collectFormData();
+
         try {
-            const config = collectFormData();
-
-            // 验证配置
-            const validation = await apiCall('/api/config/validate', {
+            const response = await apiCall('/api/config/save', {
                 method: 'POST',
                 body: JSON.stringify(config)
             });
 
-            if (!validation.valid) {
-                showValidationResults(validation.errors);
-                return;
+            if (response.success) {
+                showNotification('配置保存成功', 'success');
+                currentConfig = config;
+            } else {
+                const errors = response.errors || [];
+                const errorMessage = errors.length ? errors.map(err => `${err.field}: ${err.message}`).join('\n') : '未知错误';
+                showNotification('配置保存失败: ' + errorMessage, 'danger', 8000);
             }
-
-            // 保存配置
-            await apiCall('/api/config/save', {
-                method: 'POST',
-                body: JSON.stringify(config)
-            });
-
-            showNotification('配置保存成功', 'success');
-            await loadConfig(); // 重新加载配置
-
         } catch (error) {
             console.error('保存配置失败:', error);
-            showNotification('保存配置失败: ' + error.message, 'danger');
+            showNotification('配置保存失败: ' + error.message, 'danger');
         }
     }
 
@@ -887,14 +889,6 @@
             console.error('测试配置失败:', error);
             showNotification('测试配置失败: ' + error.message, 'danger');
         }
-    }
-
-    // 重置配置
-    function resetConfig() {
-        confirmAction('确定要重置所有配置为默认值吗？此操作不可撤销。', function() {
-            loadConfig();
-            showNotification('配置已重置为当前保存的值', 'info');
-        });
     }
 
     // 导出配置
