@@ -198,17 +198,40 @@ class SystemService:
         if not cmdline:
             return False
 
-        joined = " ".join(str(part) for part in cmdline).lower()
-        if not joined:
+        tokens = [str(part).lower() for part in cmdline if part]
+        if not tokens:
             return False
 
-        # Skip WebUI / uvicorn processes to avoid terminating the WebUI itself
-        if "webui" in joined and "server" in joined:
-            return False
-        if "uvicorn" in joined:
+        disallowed_keywords = {"webui", "uvicorn", "webdav"}
+        if any(keyword in token for token in tokens for keyword in disallowed_keywords if keyword in token):
             return False
 
-        return self.main_module.lower() in joined
+        module_name = self.main_module.lower()
+        disallowed_subcommands = {"webui", "webdav-fix", "webdav_fix"}
+
+        for index, token in enumerate(tokens):
+            if token in {"-m", "--module"} and index + 1 < len(tokens):
+                target = tokens[index + 1]
+                if target == module_name:
+                    remaining = tokens[index + 2 :]
+                    if remaining and remaining[0] in disallowed_subcommands:
+                        return False
+                    return True
+
+        entry_names = {
+            module_name,
+            module_name.replace("_", "-"),
+            f"{module_name}.exe",
+            f"{module_name.replace('_', '-')}.exe",
+        }
+
+        if tokens[0] in entry_names:
+            remaining = tokens[1:]
+            if remaining and remaining[0] in disallowed_subcommands:
+                return False
+            return True
+
+        return False
 
 
 _system_service: Optional[SystemService] = None
