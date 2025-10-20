@@ -200,7 +200,13 @@
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label">过滤规则</label>
+                                    <label class="form-label">正则规则定义</label>
+                                    <div id="regexPatterns"></div>
+                                    <div class="form-text">定义可复用的规则名称与对应正则表达式，filters 将引用这些名称</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">启用过滤规则</label>
                                     <div id="filters">
                                         <div class="input-group mb-2">
                                             <input type="text" class="form-control" name="filter" placeholder="例如: 非合集, 1080p">
@@ -560,7 +566,14 @@
             addSubscribeUrl();
         }
 
-        // 填充过滤规则
+        const patternContainer = document.getElementById('regexPatterns');
+        patternContainer.innerHTML = '';
+        if (data.regex_pattern && typeof data.regex_pattern === 'object' && Object.keys(data.regex_pattern).length > 0) {
+            Object.entries(data.regex_pattern).forEach(([name, pattern]) => addRegexPattern(name, pattern));
+        } else {
+            addRegexPattern();
+        }
+
         const filterContainer = document.getElementById('filters');
         filterContainer.innerHTML = '';
         if (Array.isArray(data.filters) && data.filters.length > 0) {
@@ -608,6 +621,33 @@
             </button>
         `;
         container.appendChild(div);
+    }
+
+    function addRegexPattern(name = '', value = '') {
+        const container = document.getElementById('regexPatterns');
+        const div = document.createElement('div');
+        div.className = 'regex-pattern-item row g-2 mb-2';
+        div.innerHTML = `
+            <div class="col-md-3">
+                <input type="text" class="form-control" name="regex_name" value="${name}" placeholder="规则名称">
+            </div>
+            <div class="col-md-8">
+                <input type="text" class="form-control" name="regex_value" value="${value}" placeholder="正则表达式">
+            </div>
+            <div class="col-md-1 d-flex align-items-center justify-content-end gap-1">
+                <button type="button" class="btn btn-outline-danger" onclick="removeRegexPattern(this)"><i class="bi bi-trash"></i></button>
+                <button type="button" class="btn btn-outline-success" onclick="addRegexPattern()"><i class="bi bi-plus"></i></button>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+
+    function removeRegexPattern(button) {
+        const container = document.getElementById('regexPatterns');
+        button.closest('.regex-pattern-item').remove();
+        if (container.children.length === 0) {
+            addRegexPattern();
+        }
     }
 
     // 移除订阅URL
@@ -721,7 +761,6 @@
     function getMikanFormData() {
         const data = getFormData('mikanForm');
 
-        // 收集订阅URL
         const subscribeUrls = [];
         document.querySelectorAll('input[name="subscribe_url"]').forEach(input => {
             if (input.value.trim()) {
@@ -730,7 +769,18 @@
         });
         data.subscribe_url = subscribeUrls;
 
-        // 收集过滤规则
+        const regexPatterns = {};
+        document.querySelectorAll('#regexPatterns .regex-pattern-item').forEach(item => {
+            const nameInput = item.querySelector('input[name="regex_name"]');
+            const valueInput = item.querySelector('input[name="regex_value"]');
+            const ruleName = nameInput ? nameInput.value.trim() : '';
+            const rulePattern = valueInput ? valueInput.value.trim() : '';
+            if (ruleName && rulePattern) {
+                regexPatterns[ruleName] = rulePattern;
+            }
+        });
+        data.regex_pattern = regexPatterns;
+
         const filters = [];
         document.querySelectorAll('input[name="filter"]').forEach(input => {
             if (input.value.trim()) {
