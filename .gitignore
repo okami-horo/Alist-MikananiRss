@@ -20,3 +20,4 @@ log/
 *.ipynb
 venv/
 .spec-workflow/approvals
+config.yaml.backup
