@@ -6,20 +6,20 @@ Alist-MikananiRss WebUI 自定义样式
 
 /* 自定义CSS变量 */
 :root {
-    --webui-primary: #4f46e5;
-    --webui-primary-dark: #4338ca;
-    --webui-secondary: #64748b;
-    --webui-success: #10b981;
-    --webui-warning: #f59e0b;
-    --webui-danger: #ef4444;
+    --webui-primary: #111827;
+    --webui-primary-dark: #0f172a;
+    --webui-secondary: #4b5563;
+    --webui-success: #2563eb;
+    --webui-warning: #f97316;
+    --webui-danger: #dc2626;
     --webui-info: #3b82f6;
 
     --webui-bg-light: #ffffff;
-    --webui-bg-dark: #1e293b;
-    --webui-text-light: #1f2937;
-    --webui-text-dark: #f9fafb;
-    --webui-border-light: #e5e7eb;
-    --webui-border-dark: #374151;
+    --webui-bg-dark: #0b0f19;
+    --webui-text-light: #0f172a;
+    --webui-text-dark: #f8fafc;
+    --webui-border-light: #d1d5db;
+    --webui-border-dark: #1f2937;
 
     --webui-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --webui-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -63,6 +63,24 @@ body.sidebar-open {
     transform: translateY(-1px);
 }
 
+.navbar.bg-primary,
+.navbar.navbar-dark,
+.navbar.navbar-light {
+    background-color: var(--webui-primary) !important;
+    color: #ffffff;
+}
+
+.navbar .navbar-brand,
+.navbar .navbar-nav .nav-link,
+.navbar .btn {
+    color: #ffffff;
+}
+
+.navbar .btn:hover,
+.navbar .nav-link:hover {
+    color: #e5e7eb;
+}
+
 /* 卡片样式增强 */
 .card {
     border: 1px solid var(--webui-border-light);
@@ -78,7 +96,7 @@ body.sidebar-open {
 }
 
 .card-header {
-    background-color: rgba(79, 70, 229, 0.05);
+    background-color: rgba(17, 24, 39, 0.04);
     border-bottom: 1px solid var(--webui-border-light);
     font-weight: 600;
 }
@@ -103,11 +121,33 @@ body.sidebar-open {
 .btn-primary {
     background-color: var(--webui-primary);
     border-color: var(--webui-primary);
+    color: #ffffff;
 }
 
 .btn-primary:hover {
     background-color: var(--webui-primary-dark);
     border-color: var(--webui-primary-dark);
+}
+
+.btn-outline-primary {
+    color: var(--webui-primary);
+    border-color: var(--webui-primary);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--webui-primary);
+    color: #ffffff;
+}
+
+.btn-outline-light {
+    color: var(--webui-primary);
+    border-color: var(--webui-border-light);
+}
+
+.btn-outline-light:hover {
+    background-color: var(--webui-primary);
+    border-color: var(--webui-primary);
+    color: #ffffff;
 }
 
 /* 表单样式增强 */
@@ -121,7 +161,7 @@ body.sidebar-open {
 
 .form-control:focus, .form-select:focus {
     border-color: var(--webui-primary);
-    box-shadow: 0 0 0 0.2rem rgba(79, 70, 229, 0.25);
+    box-shadow: 0 0 0 0.2rem rgba(17, 24, 39, 0.2);
 }
 
 /* 状态指示器 */
@@ -160,7 +200,7 @@ body.sidebar-open {
     display: inline-block;
     width: 1rem;
     height: 1rem;
-    border: 2px solid rgba(79, 70, 229, 0.25);
+    border: 2px solid rgba(17, 24, 39, 0.25);
     border-radius: 50%;
     border-top-color: var(--webui-primary);
     animation: spin 1s linear infinite;
@@ -187,7 +227,7 @@ body.sidebar-open {
 }
 
 .sidebar .nav-link:hover {
-    background-color: rgba(79, 70, 229, 0.1);
+    background-color: rgba(17, 24, 39, 0.08);
     color: var(--webui-primary);
 }
 
