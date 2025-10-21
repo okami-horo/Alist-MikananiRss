@@ -337,6 +337,10 @@ class TaskMonitor:
         # 执行WebDAV嵌套目录修复（如果启用）
         await self._execute_webdav_fix_if_needed()
 
+    async def has_running_tasks(self) -> bool:
+        async with self.lock:
+            return len(self.running_tasks) > 0
+
     async def _execute_webdav_fix_if_needed(self):
         """在所有下载任务完成后执行WebDAV嵌套目录修复（如果启用）"""
         try:
@@ -523,3 +527,8 @@ class DownloadManager(metaclass=Singleton):
                 continue
             await instance.db.insert_resource_info(matched_resource)
             await instance.task_monitor.monitor(dl_task, matched_resource)
+
+    async def has_active_tasks(self) -> bool:
+        if hasattr(self, "task_monitor") and self.task_monitor:
+            return await self.task_monitor.has_running_tasks()
+        return False

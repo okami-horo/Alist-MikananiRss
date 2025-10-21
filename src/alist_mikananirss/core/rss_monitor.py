@@ -143,6 +143,13 @@ class RssMonitor:
             # 获取DownloadManager实例
             download_manager = DownloadManager()
 
+            # 若仍存在正在运行的下载任务，则暂缓执行修复
+            if hasattr(download_manager, "has_active_tasks"):
+                has_tasks = await download_manager.has_active_tasks()
+                if has_tasks:
+                    logger.debug("检测到仍有下载任务运行，暂缓执行WebDAV修复")
+                    return
+
             # 检查是否启用了WebDAV修复功能
             if not hasattr(download_manager, 'webdav_fixer') or not download_manager.webdav_fixer:
                 logger.debug("WebDAV修复器未初始化，跳过嵌套目录修复")
