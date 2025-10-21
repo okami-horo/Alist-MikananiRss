@@ -259,6 +259,76 @@
         }
     }
 
+    function escapeHtml(value) {
+        if (typeof value !== 'string') {
+            return value;
+        }
+        return value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function formatManualDetailItem(item) {
+        if (item === null || item === undefined) {
+            return '';
+        }
+        if (typeof item === 'string') {
+            return escapeHtml(item);
+        }
+        if (Array.isArray(item)) {
+            return item.map(formatManualDetailItem).filter(Boolean).join('<br>');
+        }
+
+        const statusClassMap = {
+            success: 'bg-success',
+            skipped: 'bg-warning text-dark',
+            error: 'bg-danger',
+            pending: 'bg-secondary',
+        };
+        const statusLabelMap = {
+            success: '成功',
+            skipped: '跳过',
+            error: '错误',
+            pending: '等待',
+        };
+
+        const parts = [];
+
+        if (item.status) {
+            const badgeClass = statusClassMap[item.status] || 'bg-secondary';
+            const badgeLabel = statusLabelMap[item.status] || escapeHtml(String(item.status));
+            parts.push(`<span class="badge ${badgeClass} me-2">${badgeLabel}</span>`);
+        }
+
+        const lines = [];
+        if (item.directory) {
+            lines.push(`目录: ${escapeHtml(String(item.directory))}`);
+        }
+        if (item.file) {
+            lines.push(`文件: ${escapeHtml(String(item.file))}`);
+        }
+        if (item.new_name) {
+            lines.push(`新名称: ${escapeHtml(String(item.new_name))}`);
+        }
+        if (typeof item.size_mb === 'number') {
+            lines.push(`大小: ${item.size_mb.toFixed(2)} MB`);
+        }
+        if (item.message) {
+            lines.push(`信息: ${escapeHtml(String(item.message))}`);
+        }
+
+        const lineHtml = lines.length ? `<div>${lines.join('<br>')}</div>` : '';
+
+        if (!parts.length && !lineHtml) {
+            return escapeHtml(JSON.stringify(item));
+        }
+
+        return `${parts.join('')}${lineHtml}`;
+    }
+
     function renderManualResult(response) {
         const result = response.result || {};
         const options = response.options || {};
@@ -297,7 +367,8 @@
         if (Array.isArray(result.details) && result.details.length) {
             detailsHtml += '<h6 class="mt-3">处理明细</h6><ul class="list-group list-group-flush">';
             result.details.forEach(item => {
-                detailsHtml += `<li class="list-group-item">${item}</li>`;
+                const content = formatManualDetailItem(item);
+                detailsHtml += `<li class="list-group-item">${content}</li>`;
             });
             detailsHtml += '</ul>';
         }
