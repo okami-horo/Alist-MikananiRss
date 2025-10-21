@@ -34,6 +34,7 @@ class RssMonitor:
         self.convert_torrent_to_magnet = convert_torrent_to_magnet
 
         self.interval_time = 300
+        self._resource_semaphore = asyncio.Semaphore(8)
 
     def set_interval_time(self, interval_time: int):
         self.interval_time = interval_time
@@ -45,9 +46,9 @@ class RssMonitor:
     ) -> list[ResourceInfo]:
         """Parse all rss url and get the filtered, unique resource info list"""
 
-        async def process_entry(self, website: Website, entry):
+        async def process_entry(website: Website, entry):
             """Parse all rss url and get the filtered, unique resource info list"""
-            async with asyncio.Semaphore(8):
+            async with self._resource_semaphore:
                 try:
                     resource_info = await website.extract_resource_info(
                         entry, self.use_extractor
@@ -72,7 +73,7 @@ class RssMonitor:
             for entry in feed_entries_filted:
                 if await self.db.is_resource_title_exist(entry.resource_title):
                     continue
-                task = asyncio.create_task(process_entry(self, website, entry))
+                task = asyncio.create_task(process_entry(website, entry))
                 tasks.append(task)
             results = await asyncio.gather(*tasks)
             for resource_info in results:
@@ -106,7 +107,13 @@ class RssMonitor:
     async def run(self):
         while 1:
             logger.info("Start update checking")
-            new_resources = await self.get_new_resources(self.websites, self.filter)
+            try:
+                new_resources = await self.get_new_resources(self.websites, self.filter)
+            except Exception as e:
+                logger.error(f"Failed to get new resources: {e}")
+                logger.debug("get_new_resources raised an exception", exc_info=True)
+                await asyncio.sleep(self.interval_time)
+                continue
             if not new_resources:
                 logger.info("No new resources")
                 # 没有新资源时，执行一次WebDAV修复检查，处理可能遗漏的问题

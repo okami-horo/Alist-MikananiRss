@@ -191,11 +191,11 @@ class SubscribeDatabase:
 
     async def is_resource_title_exist(self, resource_title: str):
         try:
-            cursor = await self.db.execute(
+            async with self.db.execute(
                 "SELECT 1 FROM resource_data WHERE resource_title = ? LIMIT 1",
                 (resource_title,),
-            )
-            return await cursor.fetchone() is not None
+            ) as cursor:
+                return await cursor.fetchone() is not None
         except Exception as e:
             logger.error(f"Error checking resource existence: {e}")
             return False
