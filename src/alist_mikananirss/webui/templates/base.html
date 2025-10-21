@@ -157,26 +157,6 @@
             font-weight: bold;
         }
 
-        .btn-theme-toggle {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-
-        .btn-theme-toggle:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-        }
-
         .loading-spinner {
             display: inline-block;
             width: 1rem;
@@ -365,11 +345,6 @@
         </div>
     </div>
 
-    <!-- 主题切换按钮 -->
-    <button class="btn-theme-toggle" id="themeToggle" onclick="toggleTheme()">
-        <i class="bi bi-moon-stars"></i>
-    </button>
-
     <!-- 移动端底部导航 -->
     <nav class="mobile-bottom-nav d-md-none" id="mobileBottomNav">
         <a href="/dashboard" class="mobile-nav-item" data-nav="dashboard">
@@ -414,7 +389,6 @@
                 document.body.setAttribute('data-theme', theme);
             }
             localStorage.setItem('theme', theme);
-            updateThemeIcon(theme);
         }
 
         function setTheme(theme) {
@@ -426,15 +400,6 @@
             const currentTheme = getStoredTheme();
             const newTheme = currentTheme === THEMES.LIGHT ? THEMES.DARK : THEMES.LIGHT;
             setPreferredTheme(newTheme);
-        }
-
-        function updateThemeIcon(theme) {
-            const icon = document.querySelector('#themeToggle i');
-            if (theme === THEMES.DARK) {
-                icon.className = 'bi bi-sun';
-            } else {
-                icon.className = 'bi bi-moon-stars';
-            }
         }
 
         // 初始化主题
