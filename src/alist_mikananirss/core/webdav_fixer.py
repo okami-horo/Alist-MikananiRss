@@ -479,10 +479,43 @@ class WebDAVNestedFixer:
             bool: 是否是目录
         """
         try:
-            result = self.client.is_dir(path)
+            info = None
+
+            if hasattr(self.client, "info"):
+                info = self.client.info(path)
+            elif hasattr(self.client, "props"):
+                info = self.client.props(path)
+
+            if info is not None:
+                # webdav4 的 info/props 统一返回 is_dir、type 等字段
+                if isinstance(info, dict):
+                    if self.verbose:
+                        logger.debug(f"检查是否是目录 {path} (info): {info}")
+                    if info.get("is_dir") is not None:
+                        return bool(info.get("is_dir"))
+                    item_type = info.get("type") or info.get("content_type")
+                    if item_type:
+                        return item_type.lower() in {"directory", "collection"}
+                else:
+                    # 某些实现返回对象，尝试读取属性
+                    if self.verbose:
+                        logger.debug(f"检查是否是目录 {path} (info obj): {info}")
+                    if hasattr(info, "is_dir"):
+                        return bool(getattr(info, "is_dir"))
+                    if hasattr(info, "type"):
+                        return getattr(info, "type").lower() in {"directory", "collection"}
+
+            # 回退：使用 exists + 列表判断
+            if await self.file_exists(path):
+                items = self._list_directory_items(path)
+                # 如果能列出子项且存在任何条目，则当作目录
+                if items:
+                    if self.verbose:
+                        logger.debug(f"检查是否是目录 {path}: 列出 {len(items)} 项，视为目录")
+                    return True
             if self.verbose:
-                logger.debug(f"检查是否是目录 {path}: {result}")
-            return result
+                logger.debug(f"检查是否是目录 {path}: 未找到目录标识")
+            return False
 
         except ClientError as e:
             self._handle_webdav_error(e, "is_directory", path)
