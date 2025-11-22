@@ -50,6 +50,19 @@ Docker，源码运行等更多的运行方法详见[使用文档](https://github
 4. 运行代码：`python -m alist_mikananirss --config /path/to/config.yaml`  
 5. Enjoy
 
+## WebUI 驱动模式（FastAPI + uv）
+
+重构后的版本推荐通过 WebUI 控制后台服务。`pyproject.toml` 已定义 uv 脚本，可在仓库根目录按以下步骤使用：
+
+```bash
+uv sync  # 安装/更新依赖
+uv run alist-mikananirss-webui --host 0.0.0.0 --port 8080
+```
+
+- WebUI 会在浏览器中提供仪表盘、日志、配置与 WebDAV 维护页面，默认访问地址为 `http://<主机IP>:8080/`。
+- 可通过 `--reload`、`--log-level` 等参数调整开发体验。
+- 详细说明与端到端操作示例见 `specs/001-webui-backend-refactor/quickstart.md`。
+
 
 ## 重命名效果展示
 <div align=center>

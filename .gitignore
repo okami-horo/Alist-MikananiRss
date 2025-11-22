@@ -1,12 +1,18 @@
 # python generated files
 __pycache__/
 *.py[oc]
+.pytest_cache/
+.mypy_cache/
 build/
 dist/
 wheels/
 *.egg-info
 .coverage
 .vscode/
+.idea/
+.DS_Store
+.env
+.env.*
 
 # venv
 .venv
@@ -21,3 +27,7 @@ log/
 venv/
 .spec-workflow/approvals
 config.yaml.backup
+
+# misc
+Thumbs.db
+*.swp
