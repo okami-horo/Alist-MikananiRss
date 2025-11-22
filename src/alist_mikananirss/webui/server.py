@@ -12,16 +12,17 @@ from typing import AsyncGenerator, Optional
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
-from alist_mikananirss.webui.api.system import router as system_router
-from alist_mikananirss.webui.api.logs import router as logs_router
-from alist_mikananirss.webui.api.config import router as config_router
-from alist_mikananirss.webui.api.webdav import router as webdav_router
+from .api import register_api_routes
+from .services import refresh_service_registry
 
 logger = logging.getLogger(__name__)
+PACKAGE_ROOT = Path(__file__).resolve().parent
+STATIC_DIR = PACKAGE_ROOT / "static"
+TEMPLATE_DIR = PACKAGE_ROOT / "templates"
 
 
 @asynccontextmanager
@@ -50,7 +51,7 @@ def create_app() -> FastAPI:
     setup_middleware(app)
 
     # 添加路由
-    setup_routers(app)
+    setup_api_routes(app)
 
     # 添加静态文件服务
     setup_static_files(app)
@@ -80,58 +81,40 @@ def setup_middleware(app: FastAPI) -> None:
     )
 
 
-def setup_routers(app: FastAPI) -> None:
-    """配置路由"""
-    # API路由
-    app.include_router(
-        system_router,
-        prefix="/api/system",
-        tags=["System"]
-    )
+def setup_api_routes(app: FastAPI) -> None:
+    """配置API路由并刷新服务注册表"""
 
-    app.include_router(
-        logs_router,
-        prefix="/api/logs",
-        tags=["Logs"]
-    )
-
-    app.include_router(
-        config_router,
-        prefix="/api/config",
-        tags=["Configuration"]
-    )
-
-    app.include_router(
-        webdav_router,
-        prefix="/api/webdav",
-        tags=["WebDAV"]
-    )
+    refresh_service_registry()
+    register_api_routes(app)
 
 
 def setup_static_files(app: FastAPI) -> None:
     """配置静态文件服务"""
-    try:
-        # 挂载静态文件
-        app.mount("/static", StaticFiles(directory="src/alist_mikananirss/webui/static"), name="static")
-    except RuntimeError:
-        # 静态文件目录不存在时的处理
-        logger.warning("Static files directory not found, static file serving disabled")
+    if STATIC_DIR.exists():
+        try:
+            app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+        except RuntimeError:
+            logger.exception("Failed to mount static directory: %s", STATIC_DIR)
+    else:
+        logger.warning("Static files directory not found: %s", STATIC_DIR)
 
 
 def setup_templates(app: FastAPI) -> Optional[Jinja2Templates]:
     """配置模板引擎"""
-    try:
-        templates = Jinja2Templates(directory="src/alist_mikananirss/webui/templates")
-        return templates
-    except Exception as e:
-        logger.error(f"Template directory not found: {e}")
-        return None
+    if TEMPLATE_DIR.exists():
+        try:
+            return Jinja2Templates(directory=str(TEMPLATE_DIR))
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Failed to load templates directory %s: %s", TEMPLATE_DIR, exc)
+            return None
+    logger.error("Template directory not found: %s", TEMPLATE_DIR)
+    return None
 
 
 # 创建应用实例
 app = create_app()
 
-FAVICON_PATH = Path(__file__).resolve().parent / "static" / "images" / "favicon.ico"
+FAVICON_PATH = STATIC_DIR / "images" / "favicon.ico"
 
 
 @app.get("/", response_class=HTMLResponse)

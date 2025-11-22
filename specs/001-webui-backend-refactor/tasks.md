@@ -8,9 +8,9 @@
 
 **Purpose**: 为 WebUI 驱动的后端服务梳理基础工程设置与运行方式，统一使用 uv 和 FastAPI WebUI 入口。
 
-- [ ] T001 更新项目脚本与文档以推荐使用 `uv run alist-mikananirss-webui` 启动 WebUI 服务（pyproject.toml, specs/001-webui-backend-refactor/quickstart.md）
-- [ ] T002 [P] 校验并整理 WebUI 相关依赖（fastapi, uvicorn, jinja2, psutil 等）版本范围与分组（pyproject.toml）
-- [ ] T003 [P] 在 README 中新增“WebUI 驱动模式”简介和快速启动指引（README.md）
+- [x] T001 更新项目脚本与文档以推荐使用 `uv run alist-mikananirss-webui` 启动 WebUI 服务（pyproject.toml, specs/001-webui-backend-refactor/quickstart.md）
+- [x] T002 [P] 校验并整理 WebUI 相关依赖（fastapi, uvicorn, jinja2, psutil 等）版本范围与分组（pyproject.toml）
+- [x] T003 [P] 在 README 中新增“WebUI 驱动模式”简介和快速启动指引（README.md）
 
 ---
 
@@ -20,12 +20,13 @@
 
 **⚠️ CRITICAL**: 完成本阶段前不要开始任一用户故事实现。
 
-- [ ] T004 配置和整理 FastAPI WebUI 服务器入口，包括应用创建、路由挂载、中间件和模板/静态目录（src/alist_mikananirss/webui/server.py）
-- [ ] T005 [P] 确认并修正 WebUI 模板与静态资源目录结构（src/alist_mikananirss/webui/templates, src/alist_mikananirss/webui/static）
-- [ ] T006 [P] 为 WebUI 后端应用配置统一的日志目录与日志格式，确保 LogService 可在默认 `log/` 目录正常工作（src/alist_mikananirss/webui/services/log_service.py）
-- [ ] T007 建立 WebUI 服务层聚合导出（SystemService、LogService、ConfigService 等），方便 API 层统一引入（src/alist_mikananirss/webui/services/__init__.py）
-- [ ] T008 配置 WebUI API 模块的统一导出与路由注册（system/logs/config/webdav）（src/alist_mikananirss/webui/api/__init__.py）
+- [x] T004 配置和整理 FastAPI WebUI 服务器入口，包括应用创建、路由挂载、中间件和模板/静态目录（src/alist_mikananirss/webui/server.py）
+- [x] T005 [P] 确认并修正 WebUI 模板与静态资源目录结构（src/alist_mikananirss/webui/templates, src/alist_mikananirss/webui/static）
+- [x] T006 [P] 为 WebUI 后端应用配置统一的日志目录与日志格式，确保 LogService 可在默认 `log/` 目录正常工作（src/alist_mikananirss/webui/services/log_service.py）
+- [x] T007 建立 WebUI 服务层聚合导出（SystemService、LogService、ConfigService 等），方便 API 层统一引入（src/alist_mikananirss/webui/services/__init__.py）
+- [x] T008 配置 WebUI API 模块的统一导出与路由注册（system/logs/config/webdav）（src/alist_mikananirss/webui/api/__init__.py）
 - [ ] T009 [P] 为 WebUI 后端补充或整理基础 API/服务层单元测试骨架，确保 tests/webui 目录结构完整，并作为后续实现/重构前的最小测试基线（tests/webui/test_api.py）
+  > 阻塞：`uv run pytest tests/webui/test_api.py -q` 需构建 `psutil==5.9.8`，当前容器缺少 `gcc/python3-dev` 等构建依赖，等待环境补齐后再执行。
 
 **Checkpoint**: WebUI 后端 FastAPI 应用可通过 `uv run alist-mikananirss-webui` 启动，暴露基础健康检查 `/health` 与空白仪表盘页面。
 
