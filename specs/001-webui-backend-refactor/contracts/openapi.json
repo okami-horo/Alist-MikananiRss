@@ -1,0 +1,642 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Alist-MikananiRss WebUI API",
+    "version": "0.5.5",
+    "description": "HTTP API exposed by the WebUI backend for system control, config management, logs and WebDAV maintenance."
+  },
+  "paths": {
+    "/api/system/status": {
+      "get": {
+        "summary": "Get system status",
+        "responses": {
+          "200": {
+            "description": "Current backend service status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unable to retrieve status"
+          }
+        }
+      }
+    },
+    "/api/system/start": {
+      "post": {
+        "summary": "Start subscription system",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OperationResult"
+          },
+          "400": {
+            "description": "Unable to start system"
+          }
+        }
+      }
+    },
+    "/api/system/stop": {
+      "post": {
+        "summary": "Stop subscription system",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OperationResult"
+          },
+          "400": {
+            "description": "Unable to stop system"
+          }
+        }
+      }
+    },
+    "/api/system/restart": {
+      "post": {
+        "summary": "Restart subscription system",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OperationResult"
+          },
+          "400": {
+            "description": "Unable to restart system"
+          }
+        }
+      }
+    },
+    "/api/system/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "healthy": {
+                      "type": "boolean"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/files": {
+      "get": {
+        "summary": "List available log files",
+        "responses": {
+          "200": {
+            "description": "List of log files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LogFileInfo"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unable to list log files"
+          }
+        }
+      }
+    },
+    "/api/logs/content": {
+      "get": {
+        "summary": "Read log content",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Log entries page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogEntriesPage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Log file not found"
+          }
+        }
+      }
+    },
+    "/api/logs/recent": {
+      "get": {
+        "summary": "Get recent log entries",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent log entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LogEntry"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/search": {
+      "get": {
+        "summary": "Search logs",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogEntriesPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/stream": {
+      "get": {
+        "summary": "Stream log entries via SSE",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "poll_interval",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 5.0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-sent events stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Log file not found"
+          }
+        }
+      }
+    },
+    "/api/config/current": {
+      "get": {
+        "summary": "Get current configuration",
+        "responses": {
+          "200": {
+            "description": "Current config as JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unable to load configuration"
+          }
+        }
+      }
+    },
+    "/api/config/validate": {
+      "post": {
+        "summary": "Validate configuration payload",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigValidationResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/save": {
+      "post": {
+        "summary": "Save configuration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Save result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResultPayload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation errors"
+          }
+        }
+      }
+    },
+    "/api/config/schema": {
+      "get": {
+        "summary": "Get configuration schema used by WebUI forms",
+        "responses": {
+          "200": {
+            "description": "Schema description",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/test": {
+      "post": {
+        "summary": "Test external connectivity for given config",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Connection test result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webdav/manual-fix": {
+      "post": {
+        "summary": "Run WebDAV manual fix (preview or execute)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualFixRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Manual fix result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualFixResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Manual fix failed"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SystemStatus": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "uptime": {
+            "type": "string"
+          },
+          "cpu_usage": {
+            "type": "number"
+          },
+          "memory_usage": {
+            "type": "number"
+          },
+          "disk_usage": {
+            "type": "number"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "uptime",
+          "cpu_usage",
+          "memory_usage",
+          "disk_usage",
+          "version"
+        ]
+      },
+      "LogFileInfo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "modified": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "size",
+          "modified"
+        ]
+      },
+      "LogEntry": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string",
+            "nullable": true
+          },
+          "line_number": {
+            "type": "integer",
+            "nullable": true
+          },
+          "thread_id": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "timestamp",
+          "level",
+          "message"
+        ]
+      },
+      "LogEntriesPage": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogEntry"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ConfigValidationResult": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "valid",
+          "errors"
+        ]
+      },
+      "OperationResultPayload": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ManualFixRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "execute_mode": {
+            "type": "boolean"
+          },
+          "recursive_scan": {
+            "type": "boolean"
+          },
+          "conflict_strategy": {
+            "type": "string",
+            "enum": [
+              "skip",
+              "rename",
+              "overwrite"
+            ]
+          }
+        }
+      },
+      "ManualFixResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "target_dir": {
+            "type": "string"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "object"
+          },
+          "result": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      }
+    },
+    "responses": {
+      "OperationResult": {
+        "description": "Simple operation result",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OperationResultPayload"
+            }
+          }
+        }
+      }
+    }
+  }
+}
