@@ -60,7 +60,3 @@ dev = [
     "coverage>=7.6.10",
     "pytest-order>=1.3.0",
 ]
-
-[tool.uv.scripts]
-alist-mikananirss = "python -m alist_mikananirss"
-alist-mikananirss-webui = "python -m alist_mikananirss.webui"

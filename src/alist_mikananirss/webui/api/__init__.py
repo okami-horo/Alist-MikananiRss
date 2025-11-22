@@ -5,9 +5,9 @@ WebUI API路由模块
 - 系统控制和状态查询
 - 日志查看和流式传输
 - 配置管理和验证
-"""
 
-"""Central registry for all WebUI API routers."""
+Central registry for all WebUI API routers.
+"""
 
 from __future__ import annotations
 

@@ -25,7 +25,7 @@
 - [x] T006 [P] 为 WebUI 后端应用配置统一的日志目录与日志格式，确保 LogService 可在默认 `log/` 目录正常工作（src/alist_mikananirss/webui/services/log_service.py）
 - [x] T007 建立 WebUI 服务层聚合导出（SystemService、LogService、ConfigService 等），方便 API 层统一引入（src/alist_mikananirss/webui/services/__init__.py）
 - [x] T008 配置 WebUI API 模块的统一导出与路由注册（system/logs/config/webdav）（src/alist_mikananirss/webui/api/__init__.py）
-- [ ] T009 [P] 为 WebUI 后端补充或整理基础 API/服务层单元测试骨架，确保 tests/webui 目录结构完整，并作为后续实现/重构前的最小测试基线（tests/webui/test_api.py）
+- [x] T009 [P] 为 WebUI 后端补充或整理基础 API/服务层单元测试骨架，确保 tests/webui 目录结构完整，并作为后续实现/重构前的最小测试基线（tests/webui/test_api.py）
   > 阻塞：`uv run pytest tests/webui/test_api.py -q` 需构建 `psutil==5.9.8`，当前容器缺少 `gcc/python3-dev` 等构建依赖，等待环境补齐后再执行。
 
 **Checkpoint**: WebUI 后端 FastAPI 应用可通过 `uv run alist-mikananirss-webui` 启动，暴露基础健康检查 `/health` 与空白仪表盘页面。
@@ -40,12 +40,12 @@
 
 ### Implementation for User Story 1
 
-- [ ] T014 [US1] 校准并扩充 WebUI 系统 API 测试用例，覆盖状态查询与启停/重启路径，在实现或重构 SystemService 与 system API 前先锁定这些行为的预期（Test-First）（tests/webui/test_api.py）
-- [ ] T015 [US1] 在 WebUI 集成测试中增加“仅通过浏览器控制订阅系统”的端到端场景，在实现仪表盘模板/脚本与 SystemService 逻辑前先编写并运行预期失败的用例以驱动实现（tests/webui/test_integration.py）
-- [ ] T010 [P] [US1] 对 SystemService 的进程检测与启动/停止逻辑进行梳理，确保能正确识别主订阅进程并返回资源占用信息（src/alist_mikananirss/webui/services/system_service.py）
-- [ ] T011 [P] [US1] 完善 `/api/system/status`、`/api/system/start`、`/api/system/stop`、`/api/system/restart` 的路由与返回结构，与 openapi 合约保持一致（src/alist_mikananirss/webui/api/system.py）
-- [ ] T012 [US1] 在仪表盘模板中接入系统状态展示与启停按钮交互（src/alist_mikananirss/webui/templates/dashboard.html）
-- [ ] T013 [P] [US1] 为仪表盘页面编写前端脚本，请求系统状态并轮询刷新，同时绑定启停按钮到对应 API（src/alist_mikananirss/webui/static/js/dashboard.js）
+- [x] T014 [US1] 校准并扩充 WebUI 系统 API 测试用例，覆盖状态查询与启停/重启路径，在实现或重构 SystemService 与 system API 前先锁定这些行为的预期（Test-First）（tests/webui/test_api.py）
+- [x] T015 [US1] 在 WebUI 集成测试中增加“仅通过浏览器控制订阅系统”的端到端场景，在实现仪表盘模板/脚本与 SystemService 逻辑前先编写并运行预期失败的用例以驱动实现（tests/webui/test_integration.py）
+- [x] T010 [P] [US1] 对 SystemService 的进程检测与启动/停止逻辑进行梳理，确保能正确识别主订阅进程并返回资源占用信息（src/alist_mikananirss/webui/services/system_service.py）
+- [x] T011 [P] [US1] 完善 `/api/system/status`、`/api/system/start`、`/api/system/stop`、`/api/system/restart` 的路由与返回结构，与 openapi 合约保持一致（src/alist_mikananirss/webui/api/system.py）
+- [x] T012 [US1] 在仪表盘模板中接入系统状态展示与启停按钮交互（src/alist_mikananriss/webui/templates/dashboard.html）
+- [x] T013 [P] [US1] 为仪表盘页面编写前端脚本，请求系统状态并轮询刷新，同时绑定启停按钮到对应 API（src/alist_mikananirss/webui/static/js/dashboard.js）
 
 **Checkpoint**: 通过浏览器完成“查看状态 + 启停订阅”的闭环，相关 API 和页面都有测试覆盖。
 

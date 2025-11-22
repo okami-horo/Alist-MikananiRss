@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 import aiohttp
 import yaml
 
+from ...common.config.config import AppConfig
 from ..models import ConfigItem, ConfigValidationError
 
 
@@ -21,42 +22,59 @@ class ConfigService:
         self.config_file = Path(config_path)
         self._lock = asyncio.Lock()
         self._cache: Dict[str, Any] = {}
+        self._meta: Dict[str, Any] = {"needs_setup": False, "source": "file"}
 
     async def get_current_config(self) -> Dict[str, Any]:
         async with self._lock:
-            await self._ensure_loaded()
-            return self._clone_config(self._cache)
+            meta = await self._ensure_loaded()
+            normalized = self._normalize_to_app_config(self._cache)
+            result = normalized.model_dump()
+        result["_meta"] = meta
+        return result
 
     async def validate_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         errors = []
+        field_errors: Dict[str, list[str]] = {}
 
-        common = config.get("common")
-        if not isinstance(common, dict):
-            errors.append({"field": "common", "message": "Missing common configuration"})
-        else:
-            interval = common.get("interval_time")
-            if interval is None:
-                errors.append({"field": "common.interval_time", "message": "interval_time is required"})
-            elif not self._validate_interval_time(interval):
-                errors.append({"field": "common.interval_time", "message": "interval_time must be >= 60"})
+        def add_error(field: str, message: str) -> None:
+            errors.append({"field": field, "message": message})
+            field_errors.setdefault(field, []).append(message)
 
-            log_level = common.get("log_level")
-            if log_level is None:
-                errors.append({"field": "common.log_level", "message": "log_level is required"})
-            elif not self._validate_log_level(log_level):
-                errors.append({"field": "common.log_level", "message": "Invalid log level"})
+        try:
+            normalized = self._normalize_to_app_config(config)
+        except Exception as exc:
+            add_error("config", str(exc))
+            return {"valid": False, "errors": errors, "field_errors": field_errors}
 
-        alist = config.get("alist")
-        if not isinstance(alist, dict):
-            errors.append({"field": "alist", "message": "Missing alist configuration"})
-        else:
-            base_url = alist.get("base_url")
-            if not base_url:
-                errors.append({"field": "alist.base_url", "message": "base_url is required"})
-            elif not self._validate_url(base_url):
-                errors.append({"field": "alist.base_url", "message": "Invalid URL"})
+        common = normalized.common
+        if common.interval_time < 60:
+            add_error("common.interval_time", "interval_time must be >= 60")
 
-        return {"valid": len(errors) == 0, "errors": errors}
+        log_level = getattr(common, "log_level", "INFO")
+        if log_level.upper() not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            add_error("common.log_level", "log_level must be one of DEBUG/INFO/WARNING/ERROR/CRITICAL")
+
+        alist = normalized.alist
+        if not alist.base_url:
+            add_error("alist.base_url", "base_url is required")
+        elif not self._validate_url(alist.base_url):
+            add_error("alist.base_url", "Invalid URL")
+
+        if not alist.download_path:
+            add_error("alist.download_path", "download_path is required")
+
+        for idx, url in enumerate(normalized.mikan.subscribe_url or []):
+            if not self._validate_url(url):
+                add_error(f"mikan.subscribe_url[{idx}]", "Invalid RSS URL")
+
+        if normalized.webdav.timeout < 5:
+            add_error("webdav.timeout", "timeout must be >= 5 seconds")
+
+        return {
+            "valid": len(errors) == 0,
+            "errors": errors,
+            "field_errors": field_errors,
+        }
 
     async def save_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         async with self._lock:
@@ -65,22 +83,29 @@ class ConfigService:
 
             validation = await self.validate_config(merged)
             if not validation["valid"]:
-                return {"success": False, "errors": validation["errors"]}
+                return {
+                    "success": False,
+                    "errors": validation["errors"],
+                    "field_errors": validation["field_errors"],
+                }
 
+            backup_created = False
             if self.config_file.exists():
                 backup_path = self.config_file.with_suffix(self.config_file.suffix + ".backup")
                 shutil.copy(self.config_file, backup_path)
+                backup_created = True
 
-            self._cache = merged
+            normalized = self._normalize_to_app_config(merged)
+            self._cache = normalized.model_dump()
             await self._write_yaml(self.config_file, self._cache)
-        return {"success": True}
+        return {"success": True, "backup_created": backup_created}
 
     async def get_config_schema(self) -> Dict[str, Any]:
         async with self._lock:
             await self._ensure_loaded()
             cache_copy = self._clone_config(self._cache)
 
-        return {
+        schema: Dict[str, Any] = {
             "common": {
                 "interval_time": ConfigItem(
                     key="interval_time",
@@ -110,8 +135,42 @@ class ConfigService:
                     description="Alist访问Token",
                     required=True,
                 ).model_dump(),
+                "downloader": ConfigItem(
+                    key="downloader",
+                    value=cache_copy.get("alist", {}).get("downloader", "qBittorrent"),
+                    type="select",
+                    description="下载器类型",
+                    required=True,
+                ).model_dump(),
+                "download_path": ConfigItem(
+                    key="download_path",
+                    value=cache_copy.get("alist", {}).get("download_path", ""),
+                    description="下载保存路径",
+                    required=True,
+                ).model_dump(),
             },
+            "mikan": {
+                "subscribe_url": ConfigItem(
+                    key="subscribe_url",
+                    value=cache_copy.get("mikan", {}).get("subscribe_url", []),
+                    type="list",
+                    description="RSS订阅地址列表",
+                ).model_dump(),
+                "filters": ConfigItem(
+                    key="filters",
+                    value=cache_copy.get("mikan", {}).get("filters", []),
+                    type="list",
+                    description="过滤规则",
+                ).model_dump(),
+            },
+            "notification": cache_copy.get("notification", {}),
+            "rename": cache_copy.get("rename", {}),
+            "webdav": cache_copy.get("webdav", {}),
+            "webui": cache_copy.get("webui", {}),
+            "bot_assistant": cache_copy.get("bot_assistant", {}),
+            "dev": cache_copy.get("dev", {}),
         }
+        return schema
 
     async def test_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         async with self._lock:
@@ -122,11 +181,12 @@ class ConfigService:
         if not validation["valid"]:
             return {"success": False, "results": {"validation": validation["errors"]}}
 
+        normalized = self._normalize_to_app_config(merged)
         results: Dict[str, Dict[str, str]] = {}
 
-        alist_cfg = merged.get("alist", {})
-        base_url = alist_cfg.get("base_url")
-        token = alist_cfg.get("token")
+        alist_cfg = normalized.alist
+        base_url = alist_cfg.base_url
+        token = alist_cfg.token
         if base_url and token:
             try:
                 timeout = aiohttp.ClientTimeout(total=5)
@@ -140,16 +200,12 @@ class ConfigService:
             except Exception as exc:
                 results["alist"] = {"status": "error", "message": str(exc)}
 
-        mikan_cfg = merged.get("mikan", {})
-        if isinstance(mikan_cfg, dict):
-            subscribe_urls = mikan_cfg.get("subscribe_url") or []
-            if isinstance(subscribe_urls, str):
-                subscribe_urls = [subscribe_urls]
-            if subscribe_urls:
-                if all(self._validate_url(url) for url in subscribe_urls):
-                    results["mikan"] = {"status": "ok", "message": "Mikan subscriptions configured"}
-                else:
-                    results["mikan"] = {"status": "error", "message": "Invalid subscribe_url"}
+        subscribe_urls = normalized.mikan.subscribe_url or []
+        if subscribe_urls:
+            if all(self._validate_url(url) for url in subscribe_urls):
+                results["mikan"] = {"status": "ok", "message": "Mikan subscriptions configured"}
+            else:
+                results["mikan"] = {"status": "error", "message": "Invalid subscribe_url"}
 
         success = bool(results) and all(r.get("status") == "ok" for r in results.values())
         return {"success": success, "results": results}
@@ -166,21 +222,38 @@ class ConfigService:
         except (ValueError, TypeError):
             return False
 
-    async def _ensure_loaded(self) -> None:
+    async def _ensure_loaded(self) -> Dict[str, Any]:
         if self._cache:
-            return
+            return self._meta.copy()
         if not self.config_file.exists():
             self._cache = self._default_config()
             await self._write_yaml(self.config_file, self._cache)
+            self._meta = {"needs_setup": True, "source": "default"}
+            return self._meta.copy()
+
+        try:
+            self._cache = await self._read_yaml(self.config_file)
+        except (yaml.YAMLError, ConfigValidationError) as exc:  # pragma: no cover - defensive
+            message = exc.message if isinstance(exc, ConfigValidationError) else str(exc)
+            self._cache = self._default_config()
+            self._meta = {
+                "needs_setup": True,
+                "source": "default",
+                "recovered_from_error": True,
+                "error": message,
+            }
+            await self._write_yaml(self.config_file, self._cache)
+            return self._meta.copy()
+
+        if not self._cache:
+            self._cache = self._default_config()
+            await self._write_yaml(self.config_file, self._cache)
+            self._meta = {"needs_setup": True, "source": "default"}
         else:
-            try:
-                self._cache = await self._read_yaml(self.config_file)
-            except yaml.YAMLError as exc:
-                raise ConfigValidationError("Config file error", {"message": str(exc)}) from exc
-            if not self._cache:
-                self._cache = self._default_config()
-            else:
-                self._cache = self._merge_config(self._default_config(), self._cache)
+            self._cache = self._merge_config(self._default_config(), self._cache)
+            self._meta = {"needs_setup": False, "source": "file"}
+
+        return self._meta.copy()
 
     async def _read_yaml(self, path: Path) -> Dict[str, Any]:
         data = await asyncio.to_thread(path.read_text, encoding="utf-8")
@@ -195,8 +268,74 @@ class ConfigService:
 
     def _default_config(self) -> Dict[str, Any]:
         return {
-            "common": {"interval_time": 300, "log_level": "INFO"},
-            "alist": {"base_url": "http://localhost:5244", "token": ""},
+            "common": {
+                "interval_time": 300,
+                "log_level": "INFO",
+                "proxies": {},
+            },
+            "alist": {
+                "base_url": "http://localhost:5244",
+                "token": "",
+                "downloader": "qBittorrent",
+                "download_path": "",
+                "convert_torrent_to_magnet": False,
+            },
+            "mikan": {
+                "subscribe_url": [],
+                "filters": [],
+                "regex_pattern": {},
+            },
+            "notification": {
+                "telegram": {
+                    "enable": False,
+                    "bot_token": "",
+                    "chat_id": "",
+                },
+                "pushplus": {
+                    "enable": False,
+                    "token": "",
+                },
+            },
+            "rename": {
+                "enable": False,
+                "extractor_type": "openai",
+                "model": "",
+                "api_key": "",
+            },
+            "webdav": {
+                "username": "admin",
+                "password": "",
+                "timeout": 60,
+                "fixer": {
+                    "enable": False,
+                    "execute_mode": False,
+                    "recursive_scan": True,
+                    "conflict_strategy": "skip",
+                },
+                "manual": {
+                    "enable": True,
+                    "default_path": None,
+                    "execute_mode": False,
+                    "recursive_scan": True,
+                    "conflict_strategy": "skip",
+                },
+            },
+            "webui": {
+                "enable": True,
+                "host": "0.0.0.0",
+                "port": 8080,
+                "debug": False,
+                "secret_key": "alist-mikananirss-webui-secret-key",
+                "session_timeout": 3600,
+            },
+            "bot_assistant": {
+                "enable": False,
+                "bots": [],
+            },
+            "dev": {
+                "enable_mock_webdav": False,
+                "enable_mock_alist": False,
+            },
         }
 
     def _clone_config(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -210,6 +349,11 @@ class ConfigService:
             else:
                 merged[key] = copy.deepcopy(value)
         return merged
+
+    def _normalize_to_app_config(self, config: Dict[str, Any]) -> AppConfig:
+        if isinstance(config, AppConfig):
+            return config
+        return AppConfig.model_validate(config)
 
 
 _config_service: Optional[ConfigService] = None

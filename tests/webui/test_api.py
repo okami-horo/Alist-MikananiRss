@@ -5,15 +5,19 @@ WebUI API单元测试
 """
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from aioresponses import aioresponses
+import yaml
 
 from alist_mikananirss.webui.server import app
 from alist_mikananirss.webui.models import SystemStatus, LogEntry, ConfigItem
+from alist_mikananirss.webui.services.config_service import ConfigService
 
 
 class TestSystemAPI:
@@ -60,6 +64,21 @@ class TestSystemAPI:
 
     @pytest.mark.asyncio
     @patch('alist_mikananirss.webui.api.system.system_service')
+    async def test_start_system_failure_returns_400(self, mock_service):
+        """启动失败时返回400并带有人类可读信息"""
+        mock_service.start_system.return_value = {
+            "success": False,
+            "message": "System already running",
+        }
+
+        response = self.client.post("/api/system/start")
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "System already running"
+        mock_service.start_system.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.system.system_service')
     async def test_stop_system(self, mock_service):
         """测试停止系统"""
         mock_service.stop_system.return_value = {"success": True, "message": "System stopped"}
@@ -73,6 +92,21 @@ class TestSystemAPI:
 
     @pytest.mark.asyncio
     @patch('alist_mikananirss.webui.api.system.system_service')
+    async def test_stop_system_failure_returns_400(self, mock_service):
+        """停止失败时返回400并暴露错误原因"""
+        mock_service.stop_system.return_value = {
+            "success": False,
+            "message": "System not running",
+        }
+
+        response = self.client.post("/api/system/stop")
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "System not running"
+        mock_service.stop_system.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.system.system_service')
     async def test_restart_system(self, mock_service):
         """测试重启系统"""
         mock_service.restart_system.return_value = {"success": True, "message": "System restarted"}
@@ -82,6 +116,21 @@ class TestSystemAPI:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
+        mock_service.restart_system.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.system.system_service')
+    async def test_restart_system_failure_returns_400(self, mock_service):
+        """重启失败时返回400，提示调用方检查状态"""
+        mock_service.restart_system.return_value = {
+            "success": False,
+            "message": "Unable to stop system",
+        }
+
+        response = self.client.post("/api/system/restart")
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Unable to stop system"
         mock_service.restart_system.assert_called_once()
 
     def test_health_check(self):
@@ -388,6 +437,100 @@ class TestConfigAPI:
         assert data["success"] is True
         assert "alist" in data["results"]
         assert data["results"]["alist"]["status"] == "connected"
+
+
+class TestConfigAPIUS2:
+    """User Story 2 相关的配置API测试"""
+
+    def setup_method(self):
+        self.client = TestClient(app)
+
+    def _override_config_service(self, monkeypatch, config_path: Path) -> ConfigService:
+        service = ConfigService(config_path=str(config_path))
+        service_module = "alist_mikananirss.webui.services.config_service"
+        api_module = "alist_mikananirss.webui.api.config"
+
+        monkeypatch.setattr(f"{service_module}._config_service", service, raising=False)
+        monkeypatch.setattr(f"{service_module}.config_service", service, raising=False)
+        monkeypatch.setattr(f"{service_module}.get_config_service", lambda: service, raising=False)
+        monkeypatch.setattr(f"{api_module}.config_service", service, raising=False)
+        monkeypatch.setattr(f"{api_module}.get_config_service", lambda: service, raising=False)
+        return service
+
+    def test_get_current_config_without_file_returns_default_meta(self, tmp_path, monkeypatch):
+        config_path = tmp_path / "config.yaml"
+        self._override_config_service(monkeypatch, config_path)
+
+        response = self.client.get("/api/config/current")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["common"]["interval_time"] >= 60
+        assert data["_meta"]["needs_setup"] is True
+        assert data["_meta"]["source"] == "default"
+
+    def test_get_current_config_with_corrupted_file_recovers(self, tmp_path, monkeypatch):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("common: [broken")
+        self._override_config_service(monkeypatch, config_path)
+
+        response = self.client.get("/api/config/current")
+
+        assert response.status_code == 200
+        meta = response.json()["_meta"]
+        assert meta["needs_setup"] is True
+        assert meta["recovered_from_error"] is True
+        assert meta["error"].startswith("Config file error")
+
+    def test_save_config_creates_backup_file(self, tmp_path, monkeypatch):
+        config_path = tmp_path / "config.yaml"
+        base_config = {
+            "common": {"interval_time": 300, "log_level": "INFO"},
+            "alist": {
+                "base_url": "http://127.0.0.1:5244",
+                "token": "token",
+                "downloader": "qBittorrent",
+                "download_path": "/downloads",
+                "convert_torrent_to_magnet": False,
+            },
+        }
+        config_path.write_text(yaml.safe_dump(base_config, allow_unicode=True))
+        self._override_config_service(monkeypatch, config_path)
+
+        payload = {
+            "common": {"interval_time": 600, "log_level": "DEBUG"},
+            "alist": {
+                "base_url": "http://127.0.0.1:5244",
+                "token": "token",
+                "downloader": "qBittorrent",
+                "download_path": "/downloads",
+                "convert_torrent_to_magnet": False,
+            },
+        }
+
+        response = self.client.post("/api/config/save", json=payload)
+
+        assert response.status_code == 200
+        result = response.json()
+        assert result["success"] is True
+        assert result["backup_created"] is True
+        assert config_path.with_suffix(".yaml.backup").exists()
+
+    def test_save_config_returns_validation_errors_detail(self, tmp_path, monkeypatch):
+        config_path = tmp_path / "config.yaml"
+        self._override_config_service(monkeypatch, config_path)
+
+        payload = {
+            "common": {"interval_time": 10},
+            "alist": {"base_url": "bad"},
+        }
+
+        response = self.client.post("/api/config/save", json=payload)
+
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert "common.interval_time" in detail["field_errors"]
+        assert "alist.base_url" in detail["field_errors"]
 
 
 class TestWebUIPages:

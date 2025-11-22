@@ -9,7 +9,14 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationInfo,
+    ConfigDict,
+    field_validator,
+    field_serializer,
+)
 
 
 class LogLevel(str, Enum):
@@ -57,6 +64,10 @@ class ProcessInfo(BaseModel):
     cpu_percent: Optional[float] = Field(None, description="CPU使用率(%)")
     memory_mb: Optional[float] = Field(None, description="内存使用量(MB)")
 
+    @field_serializer("start_time")
+    def serialize_start_time(self, value: Optional[datetime]) -> Optional[str]:
+        return value.isoformat() if value else None
+
 
 class SystemStatusInfo(BaseModel):
     """系统状态信息"""
@@ -67,10 +78,7 @@ class SystemStatusInfo(BaseModel):
     process_info: Optional[ProcessInfo] = Field(None, description="进程信息")
     last_error: Optional[str] = Field(None, description="最后错误信息")
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict()
 
 
 class LogFileInfo(BaseModel):
@@ -202,10 +210,11 @@ class ApiResponse(BaseModel):
     data: Optional[Any] = Field(None, description="响应数据")
     timestamp: datetime = Field(default_factory=datetime.now, description="响应时间")
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+    model_config = ConfigDict()
+
+    @field_serializer("timestamp")
+    def serialize_timestamp(self, value: datetime) -> str:
+        return value.isoformat()
 
 
 class PaginatedResponse(ApiResponse):
