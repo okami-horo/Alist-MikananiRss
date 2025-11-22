@@ -13,6 +13,7 @@ from aioresponses import aioresponses
 import tempfile
 import os
 from pathlib import Path
+import yaml
 
 from alist_mikananirss.webui.server import app
 from alist_mikananirss.webui.services.system_service import SystemService
@@ -119,6 +120,67 @@ class TestWebUIIntegration:
         # 4. 验证服务调用
         mock_services['system'].get_system_status.assert_called()
         mock_services['system'].restart_system.assert_called_once()
+
+    def test_browser_control_subscription_flow(self, client, mock_services):
+        """测试仅通过浏览器完成启动→状态→停止的闭环"""
+        # 模拟状态从 stopped -> running -> stopped 的变化
+        mock_services['system'].get_system_status.side_effect = [
+            {
+                "status": "stopped",
+                "uptime": "0:00:00",
+                "cpu_usage": 5.0,
+                "memory_usage": 20.0,
+                "disk_usage": 30.0,
+                "version": "0.5.5",
+            },
+            {
+                "status": "running",
+                "uptime": "0:10:00",
+                "cpu_usage": 35.0,
+                "memory_usage": 45.0,
+                "disk_usage": 55.0,
+                "version": "0.5.5",
+            },
+            {
+                "status": "stopped",
+                "uptime": "0:00:00",
+                "cpu_usage": 7.0,
+                "memory_usage": 25.0,
+                "disk_usage": 32.0,
+                "version": "0.5.5",
+            },
+        ]
+
+        # 1. 初始状态应为 stopped
+        status_resp = client.get("/api/system/status")
+        assert status_resp.status_code == 200
+        assert status_resp.json()["status"] == "stopped"
+
+        # 2. 启动订阅
+        start_resp = client.post("/api/system/start")
+        assert start_resp.status_code == 200
+        assert start_resp.json()["success"] is True
+        mock_services['system'].start_system.assert_called_once()
+
+        # 3. 再次查询状态，应变为 running
+        running_resp = client.get("/api/system/status")
+        assert running_resp.status_code == 200
+        assert running_resp.json()["status"] == "running"
+
+        # 4. 停止订阅
+        stop_resp = client.post("/api/system/stop")
+        assert stop_resp.status_code == 200
+        assert stop_resp.json()["success"] is True
+        mock_services['system'].stop_system.assert_called_once()
+
+        # 5. 最终状态恢复为 stopped
+        final_resp = client.get("/api/system/status")
+        assert final_resp.status_code == 200
+        assert final_resp.json()["status"] == "stopped"
+
+        # 验证调用顺序（start 在 stop 之前）
+        assert mock_services['system'].start_system.call_count == 1
+        assert mock_services['system'].stop_system.call_count == 1
 
     def test_complete_logs_workflow(self, client, mock_services):
         """测试完整的日志查看工作流程"""
