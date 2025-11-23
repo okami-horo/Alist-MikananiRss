@@ -14,18 +14,18 @@
                 </h1>
                 <p class="text-muted small mb-0 d-md-none">在移动设备上快速查看与编辑核心配置</p>
             </div>
-            <div class="d-flex gap-2 flex-md-row flex-column w-100 w-md-auto">
+            <div class="d-flex gap-2 flex-md-row flex-column w-100 w-md-auto" id="configActionBar">
                 <div class="btn-toolbar d-none d-md-block">
                     <div class="btn-group">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="loadConfig()">
+                        <button type="button" class="btn btn-sm btn-outline-secondary config-action" data-action="reload">
                             <i class="bi bi-arrow-clockwise me-1"></i>
                             重新加载
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportConfig()">
+                        <button type="button" class="btn btn-sm btn-outline-secondary config-action" data-action="export">
                             <i class="bi bi-download me-1"></i>
                             导出
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="importConfig()">
+                        <button type="button" class="btn btn-sm btn-outline-secondary config-action" data-action="import">
                             <i class="bi bi-upload me-1"></i>
                             导入
                         </button>
@@ -36,12 +36,33 @@
                         配置操作
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end w-100">
-                        <li><button class="dropdown-item" type="button" onclick="loadConfig()"><i class="bi bi-arrow-clockwise me-2"></i>重新加载</button></li>
-                        <li><button class="dropdown-item" type="button" onclick="exportConfig()"><i class="bi bi-download me-2"></i>导出</button></li>
-                        <li><button class="dropdown-item" type="button" onclick="importConfig()"><i class="bi bi-upload me-2"></i>导入</button></li>
+                        <li><button class="dropdown-item config-action" type="button" data-action="reload"><i class="bi bi-arrow-clockwise me-2"></i>重新加载</button></li>
+                        <li><button class="dropdown-item config-action" type="button" data-action="export"><i class="bi bi-download me-2"></i>导出</button></li>
+                        <li><button class="dropdown-item config-action" type="button" data-action="import"><i class="bi bi-upload me-2"></i>导入</button></li>
                     </ul>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="alert alert-warning d-none" id="configSetupNotice" role="alert">
+        <i class="bi bi-exclamation-circle me-2"></i>
+        检测到缺失或损坏的配置，请完成必填项后保存以激活系统。
+    </div>
+
+    <div class="card border-0 shadow-sm d-none" id="configTestPanel">
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-activity text-primary"></i>
+                    <div>
+                        <div class="fw-semibold">连通性与验证</div>
+                        <div class="text-muted small" id="configTestHint">运行“测试配置”后展示 Alist / RSS 等外部依赖的检查结果</div>
+                    </div>
+                </div>
+                <span class="badge rounded-pill bg-secondary" id="configTestStatusBadge">未检测</span>
+            </div>
+            <div class="row row-cols-1 row-cols-md-3 g-3 mt-3" id="connectivityResults"></div>
         </div>
     </div>
 
@@ -92,37 +113,32 @@
                 <div class="tab-pane fade show active" id="common" role="tabpanel">
                     <div class="card mt-3">
                         <div class="card-body">
-                            <form id="commonForm">
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="interval_time" class="form-label">RSS检查间隔 (秒)</label>
-                                        <input type="number" class="form-control" id="interval_time" name="interval_time" min="60" step="1">
-                                        <div class="form-text">RSS订阅源的检查间隔时间，最小60秒</div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="log_level" class="form-label">日志级别</label>
-                                        <select class="form-select" id="log_level" name="log_level">
-                                            <option value="DEBUG">DEBUG</option>
-                                            <option value="INFO">INFO</option>
-                                            <option value="WARNING">WARNING</option>
-                                            <option value="ERROR">ERROR</option>
-                                            <option value="CRITICAL">CRITICAL</option>
-                                        </select>
-                                        <div class="form-text">系统日志记录级别</div>
-                                    </div>
+                            <form id="commonForm" class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="interval_time" class="form-label">RSS检查间隔 (秒)</label>
+                                    <input type="number" class="form-control" id="interval_time" min="60" step="1">
+                                    <div class="form-text">RSS订阅源的检查间隔时间，最小60秒</div>
                                 </div>
-
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="http_proxy" class="form-label">HTTP代理</label>
-                                        <input type="url" class="form-control" id="http_proxy" name="http_proxy" placeholder="http://proxy.example.com:8080">
-                                        <div class="form-text">HTTP请求代理地址（可选）</div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="https_proxy" class="form-label">HTTPS代理</label>
-                                        <input type="url" class="form-control" id="https_proxy" name="https_proxy" placeholder="https://proxy.example.com:8080">
-                                        <div class="form-text">HTTPS请求代理地址（可选）</div>
-                                    </div>
+                                <div class="col-md-6">
+                                    <label for="log_level" class="form-label">日志级别</label>
+                                    <select class="form-select" id="log_level">
+                                        <option value="DEBUG">DEBUG</option>
+                                        <option value="INFO">INFO</option>
+                                        <option value="WARNING">WARNING</option>
+                                        <option value="ERROR">ERROR</option>
+                                        <option value="CRITICAL">CRITICAL</option>
+                                    </select>
+                                    <div class="form-text">系统日志记录级别</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="proxy_http" class="form-label">HTTP代理</label>
+                                    <input type="url" class="form-control" id="proxy_http" placeholder="http://proxy.example.com:8080">
+                                    <div class="form-text">HTTP请求代理地址（可选）</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="proxy_https" class="form-label">HTTPS代理</label>
+                                    <input type="url" class="form-control" id="proxy_https" placeholder="https://proxy.example.com:8080">
+                                    <div class="form-text">HTTPS请求代理地址（可选）</div>
                                 </div>
                             </form>
                         </div>
@@ -133,47 +149,39 @@
                 <div class="tab-pane fade" id="alist" role="tabpanel">
                     <div class="card mt-3">
                         <div class="card-body">
-                            <form id="alistForm">
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="alist_base_url" class="form-label">Alist服务器地址</label>
-                                        <input type="url" class="form-control" id="alist_base_url" name="base_url" required>
-                                        <div class="form-text">Alist服务器的完整URL地址</div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="alist_token" class="form-label">访问令牌</label>
-                                        <input type="password" class="form-control" id="alist_token" name="token" required>
-                                        <div class="form-text">Alist API访问令牌</div>
-                                    </div>
+                            <form id="alistForm" class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="alist_base_url" class="form-label">Alist服务器地址</label>
+                                    <input type="url" class="form-control" id="alist_base_url" required>
+                                    <div class="form-text">Alist服务器的完整URL地址</div>
                                 </div>
-
-                                <div class="row">
-                                    <div class="col-md-4 mb-3">
-                                        <label for="alist_downloader" class="form-label">下载器</label>
-                                        <select class="form-select" id="alist_downloader" name="downloader">
-                                            <option value="qBittorrent">qBittorrent</option>
-                                            <option value="aria2">Aria2</option>
-                                            <option value="115 Cloud">115 Cloud</option>
-                                            <option value="115 Open">115 Open</option>
-                                        </select>
-                                        <div class="form-text">选择使用的下载器</div>
-                                    </div>
-                                    <div class="col-md-8 mb-3">
-                                        <label for="alist_download_path" class="form-label">下载路径</label>
-                                        <input type="text" class="form-control" id="alist_download_path" name="download_path" required>
-                                        <div class="form-text">Alist中的下载目标路径</div>
-                                    </div>
+                                <div class="col-md-6">
+                                    <label for="alist_token" class="form-label">访问令牌</label>
+                                    <input type="password" class="form-control" id="alist_token" required>
+                                    <div class="form-text">Alist API访问令牌</div>
                                 </div>
-
-                                <div class="row">
-                                    <div class="col-md-12 mb-3">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="alist_convert_torrent" name="convert_torrent_to_magnet">
-                                            <label class="form-check-label" for="alist_convert_torrent">
-                                                将种子文件转换为磁力链接
-                                            </label>
-                                            <div class="form-text">自动将.torrent文件转换为magnet链接进行下载</div>
-                                        </div>
+                                <div class="col-md-4">
+                                    <label for="alist_downloader" class="form-label">下载器</label>
+                                    <select class="form-select" id="alist_downloader">
+                                        <option value="qBittorrent">qBittorrent</option>
+                                        <option value="aria2">Aria2</option>
+                                        <option value="115 Cloud">115 Cloud</option>
+                                        <option value="115 Open">115 Open</option>
+                                    </select>
+                                    <div class="form-text">选择使用的下载器</div>
+                                </div>
+                                <div class="col-md-8">
+                                    <label for="alist_download_path" class="form-label">下载路径</label>
+                                    <input type="text" class="form-control" id="alist_download_path" required>
+                                    <div class="form-text">Alist中的下载目标路径</div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="alist_convert_torrent">
+                                        <label class="form-check-label" for="alist_convert_torrent">
+                                            将种子文件转换为磁力链接
+                                        </label>
+                                        <div class="form-text">自动将.torrent文件转换为magnet链接进行下载</div>
                                     </div>
                                 </div>
                             </form>
@@ -188,36 +196,28 @@
                             <form id="mikanForm">
                                 <div class="mb-3">
                                     <label class="form-label">RSS订阅源</label>
-                                    <div id="subscribeUrls">
-                                        <div class="input-group mb-2">
-                                            <input type="url" class="form-control" name="subscribe_url" placeholder="https://mikanani.me/RSS/MyBangumi?token=xxx">
-                                            <button type="button" class="btn btn-outline-success" onclick="addSubscribeUrl()">
-                                                <i class="bi bi-plus"></i>
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <div id="subscribeUrls" class="d-flex flex-column gap-2"></div>
+                                    <button type="button" class="btn btn-sm btn-outline-success mt-2" data-action="add-subscribe">
+                                        <i class="bi bi-plus"></i> 新增订阅源
+                                    </button>
                                     <div class="form-text">蜜柑计划的RSS订阅地址，支持多个订阅源</div>
                                 </div>
 
                                 <div class="mb-3">
                                     <label class="form-label">正则规则定义</label>
-                                    <div id="regexPatterns"></div>
+                                    <div id="regexPatterns" class="d-flex flex-column gap-2"></div>
+                                    <button type="button" class="btn btn-sm btn-outline-success mt-2" data-action="add-regex">
+                                        <i class="bi bi-plus"></i> 新增规则
+                                    </button>
                                     <div class="form-text">定义可复用的规则名称与对应正则表达式，filters 将引用这些名称</div>
                                 </div>
 
                                 <div class="mb-3">
                                     <label class="form-label">启用过滤规则</label>
-                                    <div id="filters">
-                                        <div class="input-group mb-2">
-                                            <input type="text" class="form-control" name="filter" placeholder="例如: 非合集, 1080p">
-                                            <button type="button" class="btn btn-outline-danger" onclick="removeFilter(this)">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-outline-success" onclick="addFilter()">
-                                                <i class="bi bi-plus"></i>
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <div id="filters" class="d-flex flex-column gap-2"></div>
+                                    <button type="button" class="btn btn-sm btn-outline-success mt-2" data-action="add-filter">
+                                        <i class="bi bi-plus"></i> 新增过滤规则
+                                    </button>
                                     <div class="form-text">过滤规则，支持正则表达式，每行一个规则</div>
                                 </div>
                             </form>
@@ -229,42 +229,67 @@
                 <div class="tab-pane fade" id="rename" role="tabpanel">
                     <div class="card mt-3">
                         <div class="card-body">
-                            <form id="renameForm">
-                                <div class="row">
-                                    <div class="col-md-12 mb-3">
-                                        <div class="form-check form-switch">
-                                            <input class="form-check-input" type="checkbox" id="rename_enable" name="enable">
-                                            <label class="form-check-label" for="rename_enable">
-                                                启用AI智能重命名
-                                            </label>
-                                            <div class="form-text">使用AI分析文件名并重命名为标准格式</div>
-                                        </div>
+                            <form id="renameForm" class="row g-3">
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="rename_enable">
+                                        <label class="form-check-label" for="rename_enable">
+                                            启用AI智能重命名
+                                        </label>
+                                        <div class="form-text">使用AI分析文件名并重命名为标准格式</div>
                                     </div>
                                 </div>
 
-                                <div id="renameConfig">
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label for="rename_extractor_type" class="form-label">AI提供商</label>
-                                            <select class="form-select" id="rename_extractor_type" name="extractor_type">
-                                                <option value="openai">OpenAI</option>
-                                                <option value="google">Google Gemini</option>
-                                                <option value="deepseek">DeepSeek</option>
-                                            </select>
-                                            <div class="form-text">选择AI服务提供商</div>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label for="rename_model" class="form-label">AI模型</label>
-                                            <input type="text" class="form-control" id="rename_model" name="model" placeholder="例如: gpt-3.5-turbo">
-                                            <div class="form-text">使用的AI模型名称</div>
-                                        </div>
+                                <div id="renameConfig" class="row g-3">
+                                    <div class="col-md-12">
+                                        <label for="rename_format" class="form-label">重命名格式</label>
+                                        <input type="text" class="form-control" id="rename_format" placeholder="{name} S{season:02d}E{episode:02d}">
+                                        <div class="form-text">控制输出文件名格式，支持番剧名、季、集等占位符</div>
                                     </div>
-
-                                    <div class="row">
-                                        <div class="col-md-12 mb-3">
-                                            <label for="rename_api_key" class="form-label">API密钥</label>
-                                            <input type="password" class="form-control" id="rename_api_key" name="api_key" placeholder="输入API密钥">
-                                            <div class="form-text">AI服务的API访问密钥</div>
+                                    <div class="col-md-4">
+                                        <label for="rename_extractor_type" class="form-label">AI提供商</label>
+                                        <select class="form-select" id="rename_extractor_type">
+                                            <option value="">选择提供商</option>
+                                            <option value="openai">OpenAI</option>
+                                            <option value="google">Google Gemini</option>
+                                            <option value="deepseek">DeepSeek</option>
+                                        </select>
+                                        <div class="form-text">选择AI服务提供商</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="rename_model" class="form-label">模型</label>
+                                        <input type="text" class="form-control" id="rename_model" placeholder="例如: gpt-4o-2024-11-20">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="rename_api_key" class="form-label">API密钥</label>
+                                        <input type="password" class="form-control" id="rename_api_key" placeholder="输入API密钥">
+                                    </div>
+                                    <div class="col-md-6" id="rename_base_url_group">
+                                        <label for="rename_base_url" class="form-label">API Base URL</label>
+                                        <input type="url" class="form-control" id="rename_base_url" placeholder="https://api.openai.com/v1">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="rename_output_type" class="form-label">输出格式</label>
+                                        <select class="form-select" id="rename_output_type">
+                                            <option value="json_object">JSON Object</option>
+                                            <option value="json_schema">JSON Schema</option>
+                                        </select>
+                                        <div class="form-text">选择提取器输出结构</div>
+                                    </div>
+                                    <div class="col-md-12">
+                                        <div class="row g-3 align-items-center">
+                                            <div class="col-md-4">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="rename_remap_enable">
+                                                    <label class="form-check-label" for="rename_remap_enable">
+                                                        启用重映射
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-8">
+                                                <label for="rename_remap_path" class="form-label mb-1">重映射配置路径</label>
+                                                <input type="text" class="form-control" id="rename_remap_path" placeholder="./remap.yaml">
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -277,64 +302,34 @@
                 <div class="tab-pane fade" id="notification" role="tabpanel">
                     <div class="card mt-3">
                         <div class="card-body">
-                            <!-- Telegram配置 -->
-                            <h6 class="border-bottom pb-2 mb-3">
-                                <i class="bi bi-telegram me-2"></i>
-                                Telegram通知
-                            </h6>
-                            <form id="telegramForm">
-                                <div class="row">
-                                    <div class="col-md-4 mb-3">
+                            <form id="notificationForm">
+                                <div class="row g-3 align-items-center">
+                                    <div class="col-md-4">
                                         <div class="form-check form-switch">
-                                            <input class="form-check-input" type="checkbox" id="telegram_enable" name="enable">
-                                            <label class="form-check-label" for="telegram_enable">
-                                                启用Telegram通知
+                                            <input class="form-check-input" type="checkbox" id="notification_enable">
+                                            <label class="form-check-label" for="notification_enable">
+                                                启用通知
                                             </label>
                                         </div>
                                     </div>
-                                </div>
-
-                                <div id="telegramConfig">
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label for="telegram_bot_token" class="form-label">Bot Token</label>
-                                            <input type="password" class="form-control" id="telegram_bot_token" name="bot_token" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
-                                            <div class="form-text">Telegram机器人的访问令牌</div>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label for="telegram_chat_id" class="form-label">Chat ID</label>
-                                            <input type="text" class="form-control" id="telegram_chat_id" name="chat_id" placeholder="123456789">
-                                            <div class="form-text">接收通知的聊天ID</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </form>
-
-                            <!-- PushPlus配置 -->
-                            <h6 class="border-bottom pb-2 mb-3 mt-4">
-                                <i class="bi bi-push me-2"></i>
-                                PushPlus通知
-                            </h6>
-                            <form id="pushplusForm">
-                                <div class="row">
-                                    <div class="col-md-4 mb-3">
-                                        <div class="form-check form-switch">
-                                            <input class="form-check-input" type="checkbox" id="pushplus_enable" name="enable">
-                                            <label class="form-check-label" for="pushplus_enable">
-                                                启用PushPlus通知
-                                            </label>
-                                        </div>
+                                    <div class="col-md-4">
+                                        <label for="notification_interval" class="form-label">通知间隔 (秒)</label>
+                                        <input type="number" class="form-control" id="notification_interval" min="0" step="60">
                                     </div>
                                 </div>
 
-                                <div id="pushplusConfig">
-                                    <div class="row">
-                                        <div class="col-md-12 mb-3">
-                                            <label for="pushplus_token" class="form-label">PushPlus Token</label>
-                                            <input type="password" class="form-control" id="pushplus_token" name="token" placeholder="输入PushPlus访问令牌">
-                                            <div class="form-text">PushPlus服务的访问令牌</div>
-                                        </div>
+                                <div class="mt-4">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <h6 class="mb-0">
+                                            <i class="bi bi-robot me-2"></i>
+                                            通知机器人
+                                        </h6>
+                                        <button type="button" class="btn btn-sm btn-outline-success" id="addNotificationBot">
+                                            <i class="bi bi-plus"></i> 添加机器人
+                                        </button>
                                     </div>
+                                    <div id="notificationBots" class="d-flex flex-column gap-2"></div>
+                                    <div class="form-text">支持 Telegram / PushPlus，至少配置一个机器人后再启用通知</div>
                                 </div>
                             </form>
                         </div>
@@ -345,72 +340,104 @@
                 <div class="tab-pane fade" id="webdav" role="tabpanel">
                     <div class="card mt-3">
                         <div class="card-body">
-                            <form id="webdavForm">
-                                <p class="text-muted small">将使用 `Alist` 配置中的 `base_url` 自动拼接 `/dav` 作为 WebDAV 地址。</p>
-
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="webdav_username" class="form-label">用户名</label>
-                                        <input type="text" class="form-control" id="webdav_username" name="username" placeholder="admin">
-                                        <div class="form-text">WebDAV登录用户名</div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="webdav_password" class="form-label">密码</label>
-                                        <input type="password" class="form-control" id="webdav_password" name="password">
-                                        <div class="form-text">WebDAV登录密码</div>
-                                    </div>
+                            <form id="webdavForm" class="row g-3">
+                                <div class="col-12">
+                                    <p class="text-muted small">将使用 Alist 配置中的 base_url 自动拼接 /dav 作为 WebDAV 地址。</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="webdav_username" class="form-label">用户名</label>
+                                    <input type="text" class="form-control" id="webdav_username" placeholder="admin">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="webdav_password" class="form-label">密码</label>
+                                    <input type="password" class="form-control" id="webdav_password">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="webdav_timeout" class="form-label">连接超时 (秒)</label>
+                                    <input type="number" class="form-control" id="webdav_timeout" min="5" max="300" value="30">
                                 </div>
 
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="webdav_timeout" class="form-label">连接超时 (秒)</label>
-                                        <input type="number" class="form-control" id="webdav_timeout" name="timeout" min="5" max="300" value="30">
-                                        <div class="form-text">WebDAV连接超时时间</div>
+                                <div class="col-12">
+                                    <h6 class="border-bottom pb-2 mb-3 mt-2">
+                                        <i class="bi bi-tools me-2"></i>
+                                        自动修复
+                                    </h6>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="webdav_fixer_enable">
+                                        <label class="form-check-label" for="webdav_fixer_enable">启用自动修复</label>
+                                        <div class="form-text">下载完成后自动执行嵌套目录修复</div>
                                     </div>
                                 </div>
-
-                                <h6 class="border-bottom pb-2 mb-3 mt-3">
-                                    <i class="bi bi-tools me-2"></i>
-                                    嵌套目录修复工具
-                                </h6>
-
-                                <div class="alert alert-info d-flex align-items-center" role="alert">
-                                    <i class="bi bi-lightning-charge-fill me-2"></i>
-                                    <div>
-                                        手动触发一次性修复已迁移至 <a href="/webdav/manual" class="alert-link">WebDAV修复</a> 页面。
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="webdav_execute_mode">
+                                        <label class="form-check-label" for="webdav_execute_mode">实际执行</label>
+                                        <div class="form-text">关闭则仅预览（dry-run）</div>
                                     </div>
                                 </div>
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="webdav_recursive_scan">
+                                        <label class="form-check-label" for="webdav_recursive_scan">递归扫描</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="webdav_conflict_strategy" class="form-label">冲突策略</label>
+                                    <select class="form-select" id="webdav_conflict_strategy">
+                                        <option value="skip">跳过</option>
+                                        <option value="rename">重命名</option>
+                                        <option value="overwrite">覆盖</option>
+                                    </select>
+                                </div>
 
-                                <div class="row">
-                                    <div class="col-md-4 mb-3">
-                                        <div class="form-check form-switch">
-                                            <input class="form-check-input" type="checkbox" id="webdav_execute_mode" name="fixer_execute_mode">
-                                            <label class="form-check-label" for="webdav_execute_mode">
-                                                启用自动修复
-                                            </label>
-                                            <div class="form-text">下载完成后自动执行嵌套目录修复</div>
+                                <div class="col-12">
+                                    <h6 class="border-bottom pb-2 mb-3 mt-2">
+                                        <i class="bi bi-lightning-charge me-2"></i>
+                                        手动修复默认值
+                                    </h6>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="webdav_manual_enable">
+                                        <label class="form-check-label" for="webdav_manual_enable">允许手动修复</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <label for="webdav_manual_path" class="form-label">默认路径</label>
+                                    <input type="text" class="form-control" id="webdav_manual_path" placeholder="/115/TV/...">
+                                    <div class="form-text">在 WebDAV 修复页面的默认目标目录</div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="webdav_manual_execute">
+                                        <label class="form-check-label" for="webdav_manual_execute">默认执行模式</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="webdav_manual_recursive">
+                                        <label class="form-check-label" for="webdav_manual_recursive">默认递归</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="webdav_manual_strategy" class="form-label">默认冲突策略</label>
+                                    <select class="form-select" id="webdav_manual_strategy">
+                                        <option value="skip">跳过</option>
+                                        <option value="rename">重命名</option>
+                                        <option value="overwrite">覆盖</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-12">
+                                    <div class="alert alert-info d-flex align-items-center" role="alert">
+                                        <i class="bi bi-lightning-charge-fill me-2"></i>
+                                        <div>
+                                            手动触发一次性修复已迁移至 <a href="/webdav/manual" class="alert-link">WebDAV修复</a> 页面。
                                         </div>
                                     </div>
-                                    <div class="col-md-4 mb-3">
-                                        <div class="form-check form-switch">
-                                            <input class="form-check-input" type="checkbox" id="webdav_recursive_scan" name="fixer_recursive_scan">
-                                            <label class="form-check-label" for="webdav_recursive_scan">
-                                                递归扫描
-                                            </label>
-                                            <div class="form-text">递归扫描子目录进行修复</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label for="webdav_conflict_strategy" class="form-label">冲突策略</label>
-                                        <select class="form-select" id="webdav_conflict_strategy" name="fixer_conflict_strategy">
-                                            <option value="skip">跳过</option>
-                                            <option value="rename">重命名</option>
-                                            <option value="overwrite">覆盖</option>
-                                        </select>
-                                        <div class="form-text">文件冲突时的处理策略</div>
-                                    </div>
                                 </div>
-
                             </form>
                         </div>
                     </div>
@@ -424,17 +451,17 @@
         <div class="col-12">
             <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
                 <div class="d-flex flex-column flex-sm-row gap-2">
-                    <button type="button" class="btn btn-outline-secondary" onclick="testConfig()">
+                    <button type="button" class="btn btn-outline-secondary" id="btnTestConfig">
                         <i class="bi bi-check-circle me-2"></i>
                         测试配置
                     </button>
-                    <button type="button" class="btn btn-outline-warning" onclick="resetConfig()">
+                    <button type="button" class="btn btn-outline-warning" id="btnResetConfig">
                         <i class="bi bi-arrow-counterclockwise me-2"></i>
                         重置为默认
                     </button>
                 </div>
                 <div>
-                    <button type="button" class="btn btn-success w-100 w-md-auto" onclick="saveConfig()">
+                    <button type="button" class="btn btn-success w-100 w-md-auto" id="btnSaveConfig">
                         <i class="bi bi-save me-2"></i>
                         保存配置
                     </button>
@@ -455,13 +482,13 @@
             <div class="modal-body">
                 <div class="mb-3">
                     <label for="importFile" class="form-label">选择配置文件</label>
-                    <input type="file" class="form-control" id="importFile" accept=".yaml,.yml">
-                    <div class="form-text">支持YAML格式的配置文件</div>
+                    <input type="file" class="form-control" id="importFile" accept=".yaml,.yml,.json">
+                    <div class="form-text">支持YAML或JSON格式的配置文件</div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" onclick="doImportConfig()">导入</button>
+                <button type="button" class="btn btn-primary" id="btnDoImport">导入</button>
             </div>
         </div>
     </div>
@@ -476,9 +503,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div id="validationResults">
-                    <!-- 验证结果将显示在这里 -->
-                </div>
+                <div id="validationResults"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
@@ -489,524 +514,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    let currentConfig = {};
-
-    // 页面初始化
-    document.addEventListener('DOMContentLoaded', function() {
-        setActiveNav('config');
-        loadConfig();
-        setupFormValidation();
-    });
-
-    // 加载配置
-    async function loadConfig() {
-        try {
-            currentConfig = await apiCall('/api/config/current');
-            populateForms();
-            showNotification('配置加载成功', 'success');
-        } catch (error) {
-            console.error('加载配置失败:', error);
-            showNotification('加载配置失败: ' + error.message, 'danger');
-        }
-    }
-
-    // 填充表单
-    function populateForms() {
-        // 基础配置
-        if (currentConfig.common) {
-            setFormData('commonForm', currentConfig.common);
-        }
-
-        // Alist配置
-        if (currentConfig.alist) {
-            setFormData('alistForm', currentConfig.alist);
-        }
-
-        // 蜜柑配置
-        if (currentConfig.mikan) {
-            populateMikanConfig(currentConfig.mikan);
-        }
-
-        // 重命名配置
-        if (currentConfig.rename) {
-            populateRenameConfig(currentConfig.rename);
-        }
-
-        // 通知配置
-        if (currentConfig.notification) {
-            populateNotificationConfig(currentConfig.notification);
-        }
-
-        // WebDAV配置
-        if (currentConfig.webdav) {
-            populateWebdavConfig(currentConfig.webdav);
-        }
-    }
-
-    // 设置表单数据
-    function setFormData(formId, data) {
-        const form = document.getElementById(formId);
-        if (!form) return;
-
-        Object.keys(data).forEach(key => {
-            const input = form.querySelector(`[name="${key}"]`);
-            if (input) {
-                if (input.type === 'checkbox') {
-                    input.checked = data[key];
-                } else {
-                    input.value = data[key] || '';
-                }
-            }
-        });
-    }
-
-    // 填充蜜柑配置
-    function populateMikanConfig(data) {
-        setFormData('mikanForm', data);
-
-        // 填充订阅URL
-        const subscribeContainer = document.getElementById('subscribeUrls');
-        subscribeContainer.innerHTML = '';
-        if (Array.isArray(data.subscribe_url) && data.subscribe_url.length > 0) {
-            data.subscribe_url.forEach(url => addSubscribeUrl(url));
-        } else {
-            addSubscribeUrl();
-        }
-
-        const patternContainer = document.getElementById('regexPatterns');
-        patternContainer.innerHTML = '';
-        if (data.regex_pattern && typeof data.regex_pattern === 'object' && Object.keys(data.regex_pattern).length > 0) {
-            Object.entries(data.regex_pattern).forEach(([name, pattern]) => addRegexPattern(name, pattern));
-        } else {
-            addRegexPattern();
-        }
-
-        const filterContainer = document.getElementById('filters');
-        filterContainer.innerHTML = '';
-        if (Array.isArray(data.filters) && data.filters.length > 0) {
-            data.filters.forEach(filter => addFilter(filter));
-        } else {
-            addFilter();
-        }
-    }
-
-    // 填充重命名配置
-    function populateRenameConfig(data) {
-        setFormData('renameForm', data);
-        toggleRenameConfig();
-    }
-
-    // 填充通知配置
-    function populateNotificationConfig(data) {
-        if (data.telegram) {
-            setFormData('telegramForm', data.telegram);
-            toggleTelegramConfig();
-        }
-        if (data.pushplus) {
-            setFormData('pushplusForm', data.pushplus);
-            togglePushplusConfig();
-        }
-    }
-
-    // 填充WebDAV配置
-    function populateWebdavConfig(data) {
-        const form = document.getElementById('webdavForm');
-        if (!form) return;
-
-        ['username', 'password', 'timeout'].forEach(key => {
-            const input = form.querySelector(`[name="${key}"]`);
-            if (!input) return;
-            if (input.type === 'checkbox') {
-                input.checked = !!data[key];
-            } else if (data[key] !== undefined && data[key] !== null) {
-                input.value = data[key];
-            } else if (input.type !== 'password') {
-                input.value = '';
-            }
-        });
-
-        const fixer = data.fixer || {};
-        const enableInput = form.querySelector('#webdav_execute_mode');
-        if (enableInput) {
-            enableInput.checked = fixer.enable ?? fixer.execute_mode ?? false;
-        }
-
-        const recursiveInput = form.querySelector('#webdav_recursive_scan');
-        if (recursiveInput) {
-            recursiveInput.checked = fixer.recursive_scan ?? false;
-        }
-
-        const strategyInput = form.querySelector('#webdav_conflict_strategy');
-        if (strategyInput && fixer.conflict_strategy) {
-            strategyInput.value = fixer.conflict_strategy;
-        }
-
-    }
-
-    // 添加订阅URL
-    function addSubscribeUrl(value = '') {
-        const container = document.getElementById('subscribeUrls');
-        const div = document.createElement('div');
-        div.className = 'input-group mb-2';
-        div.innerHTML = `
-            <input type="url" class="form-control" name="subscribe_url" value="${value}" placeholder="https://mikanani.me/RSS/MyBangumi?token=xxx">
-            <button type="button" class="btn btn-outline-danger" onclick="removeSubscribeUrl(this)">
-                <i class="bi bi-trash"></i>
-            </button>
-            <button type="button" class="btn btn-outline-success" onclick="addSubscribeUrl()">
-                <i class="bi bi-plus"></i>
-            </button>
-        `;
-        container.appendChild(div);
-    }
-
-    function addRegexPattern(name = '', value = '') {
-        const container = document.getElementById('regexPatterns');
-        const div = document.createElement('div');
-        div.className = 'regex-pattern-item row g-2 mb-2';
-        div.innerHTML = `
-            <div class="col-md-3">
-                <input type="text" class="form-control" name="regex_name" value="${name}" placeholder="规则名称">
-            </div>
-            <div class="col-md-8">
-                <input type="text" class="form-control" name="regex_value" value="${value}" placeholder="正则表达式">
-            </div>
-            <div class="col-md-1 d-flex align-items-center justify-content-end gap-1">
-                <button type="button" class="btn btn-outline-danger" onclick="removeRegexPattern(this)"><i class="bi bi-trash"></i></button>
-                <button type="button" class="btn btn-outline-success" onclick="addRegexPattern()"><i class="bi bi-plus"></i></button>
-            </div>
-        `;
-        container.appendChild(div);
-    }
-
-    function removeRegexPattern(button) {
-        const container = document.getElementById('regexPatterns');
-        button.closest('.regex-pattern-item').remove();
-        if (container.children.length === 0) {
-            addRegexPattern();
-        }
-    }
-
-    // 移除订阅URL
-    function removeSubscribeUrl(button) {
-        const container = document.getElementById('subscribeUrls');
-        button.parentElement.remove();
-        if (container.children.length === 0) {
-            addSubscribeUrl();
-        }
-    }
-
-    // 添加过滤规则
-    function addFilter(value = '') {
-        const container = document.getElementById('filters');
-        const div = document.createElement('div');
-        div.className = 'input-group mb-2';
-        div.innerHTML = `
-            <input type="text" class="form-control" name="filter" value="${value}" placeholder="例如: 非合集, 1080p">
-            <button type="button" class="btn btn-outline-danger" onclick="removeFilter(this)">
-                <i class="bi bi-trash"></i>
-            </button>
-            <button type="button" class="btn btn-outline-success" onclick="addFilter()">
-                <i class="bi bi-plus"></i>
-            </button>
-        `;
-        container.appendChild(div);
-    }
-
-    // 移除过滤规则
-    function removeFilter(button) {
-        const container = document.getElementById('filters');
-        button.parentElement.remove();
-        if (container.children.length === 0) {
-            addFilter();
-        }
-    }
-
-    // 切换重命名配置显示
-    function toggleRenameConfig() {
-        const enable = document.getElementById('rename_enable').checked;
-        const config = document.getElementById('renameConfig');
-        config.style.display = enable ? 'block' : 'none';
-    }
-
-    // 切换Telegram配置显示
-    function toggleTelegramConfig() {
-        const enable = document.getElementById('telegram_enable').checked;
-        const config = document.getElementById('telegramConfig');
-        config.style.display = enable ? 'block' : 'none';
-    }
-
-    // 切换Pushplus配置显示
-    function togglePushplusConfig() {
-        const enable = document.getElementById('pushplus_enable').checked;
-        const config = document.getElementById('pushplusConfig');
-        config.style.display = enable ? 'block' : 'none';
-    }
-
-    // 收集表单数据
-    function collectFormData() {
-        const config = {};
-
-        // 基础配置
-        config.common = getFormData('commonForm');
-
-        // Alist配置
-        config.alist = getFormData('alistForm');
-
-        // 蜜柑配置
-        config.mikan = getMikanFormData();
-
-        // 重命名配置
-        config.rename = getFormData('renameForm');
-
-        // 通知配置
-        config.notification = {
-            telegram: getFormData('telegramForm'),
-            pushplus: getFormData('pushplusForm')
-        };
-
-        // WebDAV配置
-        const webdavRaw = getFormData('webdavForm');
-        const {
-            fixer_execute_mode = false,
-            fixer_recursive_scan = false,
-            fixer_conflict_strategy = 'skip',
-            ...webdavBase
-        } = webdavRaw;
-
-        config.webdav = {
-            ...(currentConfig.webdav || {}),
-            ...webdavBase,
-            fixer: {
-                ...(currentConfig.webdav?.fixer || {}),
-                enable: !!fixer_execute_mode,
-                execute_mode: !!fixer_execute_mode,
-                recursive_scan: !!fixer_recursive_scan,
-                conflict_strategy: fixer_conflict_strategy || 'skip'
-            }
-        };
-
-        return config;
-    }
-
-    // 获取表单数据
-    function getFormData(formId) {
-        const form = document.getElementById(formId);
-        const data = {};
-
-        if (!form) return data;
-
-        const inputs = form.querySelectorAll('input, select, textarea');
-        inputs.forEach(input => {
-            if (input.name) {
-                if (input.type === 'checkbox') {
-                    data[input.name] = input.checked;
-                } else if (input.type === 'number') {
-                    data[input.name] = parseFloat(input.value) || 0;
-                } else {
-                    data[input.name] = input.value;
-                }
-            }
-        });
-
-        return data;
-    }
-
-    // 获取蜜柑表单数据
-    function getMikanFormData() {
-        const data = getFormData('mikanForm');
-
-        const subscribeUrls = [];
-        document.querySelectorAll('input[name="subscribe_url"]').forEach(input => {
-            if (input.value.trim()) {
-                subscribeUrls.push(input.value.trim());
-            }
-        });
-        data.subscribe_url = subscribeUrls;
-
-        const regexPatterns = {};
-        document.querySelectorAll('#regexPatterns .regex-pattern-item').forEach(item => {
-            const nameInput = item.querySelector('input[name="regex_name"]');
-            const valueInput = item.querySelector('input[name="regex_value"]');
-            const ruleName = nameInput ? nameInput.value.trim() : '';
-            const rulePattern = valueInput ? valueInput.value.trim() : '';
-            if (ruleName && rulePattern) {
-                regexPatterns[ruleName] = rulePattern;
-            }
-        });
-        data.regex_pattern = regexPatterns;
-
-        const filters = [];
-        document.querySelectorAll('input[name="filter"]').forEach(input => {
-            if (input.value.trim()) {
-                filters.push(input.value.trim());
-            }
-        });
-        data.filters = filters;
-
-        return data;
-    }
-
-    // 保存配置
-    async function saveConfig() {
-        const config = collectFormData();
-
-        try {
-            const response = await apiCall('/api/config/save', {
-                method: 'POST',
-                body: JSON.stringify(config)
-            });
-
-            if (response.success) {
-                showNotification('配置保存成功', 'success');
-                currentConfig = config;
-            } else {
-                const errors = response.errors || [];
-                const errorMessage = errors.length ? errors.map(err => `${err.field}: ${err.message}`).join('\n') : '未知错误';
-                showNotification('配置保存失败: ' + errorMessage, 'danger', 8000);
-            }
-        } catch (error) {
-            console.error('保存配置失败:', error);
-            showNotification('配置保存失败: ' + error.message, 'danger');
-        }
-    }
-
-    // 测试配置
-    async function testConfig() {
-        try {
-            showNotification('正在测试配置...', 'info');
-
-            const config = collectFormData();
-            const result = await apiCall('/api/config/test', {
-                method: 'POST',
-                body: JSON.stringify(config)
-            });
-
-            showValidationResults(result.results);
-
-        } catch (error) {
-            console.error('测试配置失败:', error);
-            showNotification('测试配置失败: ' + error.message, 'danger');
-        }
-    }
-
-    // 导出配置
-    function exportConfig() {
-        const config = collectFormData();
-        const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `alist-mikananirss-config-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showNotification('配置导出成功', 'success');
-    }
-
-    // 导入配置
-    function importConfig() {
-        const modal = new bootstrap.Modal(document.getElementById('importModal'));
-        modal.show();
-    }
-
-    // 执行导入配置
-    async function doImportConfig() {
-        const fileInput = document.getElementById('importFile');
-        const file = fileInput.files[0];
-
-        if (!file) {
-            showNotification('请选择配置文件', 'warning');
-            return;
-        }
-
-        try {
-            const text = await file.text();
-            const config = JSON.parse(text);
-
-            // 验证导入的配置
-            const validation = await apiCall('/api/config/validate', {
-                method: 'POST',
-                body: JSON.stringify(config)
-            });
-
-            if (!validation.valid) {
-                showValidationResults(validation.errors);
-                return;
-            }
-
-            currentConfig = config;
-            populateForms();
-
-            bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
-            showNotification('配置导入成功，请检查并保存', 'success');
-
-        } catch (error) {
-            console.error('导入配置失败:', error);
-            showNotification('导入配置失败: ' + error.message, 'danger');
-        }
-    }
-
-    // 显示验证结果
-    function showValidationResults(results) {
-        const modal = new bootstrap.Modal(document.getElementById('validationModal'));
-        const content = document.getElementById('validationResults');
-
-        let html = '';
-        if (Array.isArray(results)) {
-            if (results.length === 0) {
-                html = '<div class="alert alert-success">配置验证通过</div>';
-            } else {
-                results.forEach(error => {
-                    html += `
-                        <div class="alert alert-${error.severity || 'warning'}">
-                            <h6>${error.section || '配置'}</h6>
-                            <p class="mb-0">${error.message}</p>
-                        </div>
-                    `;
-                });
-            }
-        } else if (typeof results === 'object') {
-            Object.keys(results).forEach(section => {
-                const sectionResults = results[section];
-                html += `<h6 class="mt-3">${section}</h6>`;
-
-                if (Array.isArray(sectionResults) && sectionResults.length === 0) {
-                    html += '<div class="alert alert-success">验证通过</div>';
-                } else {
-                    sectionResults.forEach(error => {
-                        html += `
-                            <div class="alert alert-${error.severity || 'warning'}">
-                                <p class="mb-0">${error.message}</p>
-                            </div>
-                        `;
-                    });
-                }
-            });
-        }
-
-        content.innerHTML = html;
-        modal.show();
-    }
-
-    // 设置表单验证
-    function setupFormValidation() {
-        // 重命名配置切换
-        document.getElementById('rename_enable').addEventListener('change', toggleRenameConfig);
-
-        // Telegram配置切换
-        document.getElementById('telegram_enable').addEventListener('change', toggleTelegramConfig);
-
-        // Pushplus配置切换
-        document.getElementById('pushplus_enable').addEventListener('change', togglePushplusConfig);
-
-        // 表单验证
-        const forms = document.querySelectorAll('form');
-        forms.forEach(form => {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-            });
-        });
-    }
-</script>
+<script type="module" src="{{ url_for('static', path='js/config.js') }}"></script>
 {% endblock %}

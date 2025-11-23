@@ -53,6 +53,7 @@ async def validate_config(config: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     if "valid" not in payload:
         payload["valid"] = True
     payload.setdefault("errors", [])
+    payload.setdefault("field_errors", {})
     return payload
 
 
@@ -63,7 +64,7 @@ async def save_config(config: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         result["success"] = True
     if result.get("success"):
         return result
-    raise HTTPException(400, {"errors": result.get("errors", [])})
+    raise HTTPException(400, result)
 
 
 @router.get("/schema")
@@ -74,7 +75,7 @@ async def get_schema() -> Dict[str, Any]:
 @router.post("/test")
 async def test_config(config: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     payload = _as_dict(await _resolve(config_service.test_config(config)))
-    payload.setdefault("success", True)
+    payload["success"] = bool(payload.get("success", True))
     payload.setdefault("results", {})
     return payload
 

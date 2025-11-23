@@ -21,6 +21,19 @@ from alist_mikananirss.webui.services.log_service import LogService
 from alist_mikananirss.webui.services.config_service import ConfigService
 
 
+def override_config_service(monkeypatch, config_path: Path) -> ConfigService:
+    service = ConfigService(config_path=str(config_path))
+    service_module = "alist_mikananirss.webui.services.config_service"
+    api_module = "alist_mikananirss.webui.api.config"
+
+    monkeypatch.setattr(f"{service_module}._config_service", service, raising=False)
+    monkeypatch.setattr(f"{service_module}.config_service", service, raising=False)
+    monkeypatch.setattr(f"{service_module}.get_config_service", lambda: service, raising=False)
+    monkeypatch.setattr(f"{api_module}.config_service", service, raising=False)
+    monkeypatch.setattr(f"{api_module}.get_config_service", lambda: service, raising=False)
+    return service
+
+
 class TestWebUIIntegration:
     """WebUI端到端集成测试"""
 
@@ -269,6 +282,68 @@ class TestWebUIIntegration:
         mock_services['config'].get_current_config.assert_called()
         mock_services['config'].validate_config.assert_called_with(test_config)
         mock_services['config'].save_config.assert_called_with(test_config)
+
+    def test_first_time_setup_flow_generates_config(self, tmp_path, monkeypatch):
+        """首次访问缺失配置文件时通过 WebUI 完成校验/保存"""
+        config_path = tmp_path / "config.yaml"
+        override_config_service(monkeypatch, config_path)
+
+        client = TestClient(app)
+
+        # 1. 首次获取配置应进入引导模式
+        resp = client.get("/api/config/current")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["_meta"]["needs_setup"] is True
+        assert payload["_meta"]["source"] == "default"
+
+        # 2. 填写新配置并验证
+        new_config = {
+            "common": {"interval_time": 300, "log_level": "INFO"},
+            "alist": {
+                "base_url": "http://127.0.0.1:5244",
+                "token": "token",
+                "downloader": "qBittorrent",
+                "download_path": "/downloads",
+                "convert_torrent_to_magnet": False,
+            },
+            "mikan": {
+                "subscribe_url": ["https://example.com/rss"],
+                "filters": [],
+                "regex_pattern": {},
+            },
+            "webdav": {
+                "username": "admin",
+                "password": "1234",
+                "timeout": 60,
+            },
+        }
+
+        validation = client.post("/api/config/validate", json=new_config)
+        assert validation.status_code == 200
+        assert validation.json()["valid"] is True
+
+        # 3. 保存配置，首次不应产生备份
+        save_resp = client.post("/api/config/save", json=new_config)
+        assert save_resp.status_code == 200
+        save_result = save_resp.json()
+        assert save_result["success"] is True
+        assert save_result["backup_created"] is False
+        assert config_path.exists()
+
+        # 4. 测试配置连通性（模拟 Alist 返回 200）
+        with aioresponses() as mocked:
+            mocked.get("http://127.0.0.1:5244/api/me", status=200)
+            test_resp = client.post("/api/config/test", json=new_config)
+
+        assert test_resp.status_code == 200
+        test_result = test_resp.json()
+        assert test_result["success"] is True
+        assert test_result["results"]["alist"]["status"] == "ok"
+
+        # 5. 再次获取配置应标记为来自文件
+        refreshed = client.get("/api/config/current")
+        assert refreshed.json()["_meta"]["source"] == "file"
 
     def test_error_handling_workflow(self, client):
         """测试错误处理工作流程"""

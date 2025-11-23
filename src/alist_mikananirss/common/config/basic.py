@@ -15,6 +15,9 @@ class CommonConfig(BaseModel):
     interval_time: int = Field(
         default=300, ge=0, description="Interval time must be non-negative"
     )
+    log_level: str = Field(
+        default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$"
+    )
     proxies: Dict[str, str] = Field(
         default_factory=dict, description="Proxies for requests"
     )
@@ -38,7 +41,8 @@ class AlistConfig(BaseModel):
         try:
             # 正确的URL验证方式
             parsed_url = HttpUrl(url)
-            return str(parsed_url)
+            normalized = str(parsed_url).rstrip("/")
+            return normalized
         except ValueError:
             raise ValueError(f"Invalid URL: {url}")
 
