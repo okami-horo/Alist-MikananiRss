@@ -1,52 +1,99 @@
 {% extends "base.html" %}
 
-{% block title %}日志查看 - Alist-MikananiRss WebUI{% endblock %}
+{% block title %}实时日志 - Alist-MikananiRss WebUI{% endblock %}
 
 {% block extra_css %}
 <style>
-    .logs-page .log-container {
-        max-height: 70vh;
+    .logs-page .live-hero {
+        background: linear-gradient(120deg, var(--webui-primary-dark), #0c1324 60%, #0b0f19);
+        color: var(--webui-text-dark);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        box-shadow: var(--webui-shadow-lg);
+        border-radius: 1.25rem;
+    }
+
+    .logs-page .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        display: inline-block;
+        background: var(--webui-secondary);
+        box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.08);
+    }
+
+    .logs-page .status-dot.live {
+        background: var(--webui-success);
+        box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.25);
+    }
+
+    .logs-page .status-dot.connecting {
+        background: var(--webui-warning);
+        box-shadow: 0 0 0 8px rgba(249, 115, 22, 0.25);
+    }
+
+    .logs-page .status-dot.paused {
+        background: var(--webui-border-light);
+    }
+
+    .logs-page .status-dot.error {
+        background: var(--webui-danger);
+        box-shadow: 0 0 0 8px rgba(220, 38, 38, 0.3);
+    }
+
+    .logs-page .control-card {
         border-radius: 1rem;
     }
 
-    .logs-page .logs-header {
-        gap: 1rem;
+    .logs-page .log-feed {
+        background: #0b1220;
+        color: #e5e7eb;
+        min-height: 420px;
+        max-height: 72vh;
+        overflow-y: auto;
+        font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
 
-    .logs-page .logs-actions {
+    .logs-page .log-line {
+        display: grid;
+        grid-template-columns: auto auto 1fr;
         gap: 0.75rem;
+        align-items: center;
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        transition: background-color 0.2s ease;
     }
 
-    .logs-page .log-stats .card {
-        border-radius: 1rem;
+    .logs-page .log-line:hover {
+        background: rgba(255, 255, 255, 0.04);
+        cursor: pointer;
+    }
+
+    .logs-page .log-time {
+        color: rgba(229, 231, 235, 0.7);
+        font-size: 0.85rem;
+    }
+
+    .logs-page .log-message {
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+
+    .logs-page .empty-state {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 2rem;
+    }
+
+    .logs-page .stat-card {
+        border-radius: 0.9rem;
     }
 
     @media (max-width: 992px) {
-        .logs-page .log-container {
-            max-height: 60vh;
-            font-size: 0.9rem;
-        }
-        .logs-page .logs-header {
-            align-items: flex-start;
-        }
-    }
-
-    @media (max-width: 768px) {
-        .logs-page .log-stats .card-body {
-            padding: 0.85rem;
-        }
-    }
-
-    @media (max-width: 576px) {
-        .logs-page .page-header h1 {
-            font-size: 1.5rem;
-        }
-        .logs-page .logs-actions {
-            flex-direction: column;
-        }
-        .logs-page .logs-actions .btn-toolbar {
-            width: 100%;
-            justify-content: flex-start;
+        .logs-page .log-line {
+            grid-template-columns: auto 1fr;
+            grid-template-rows: auto auto;
         }
     }
 </style>
@@ -54,127 +101,94 @@
 
 {% block content %}
 <div class="fade-in logs-page">
-    <!-- 页面标题 -->
-    <div class="page-header border-bottom pt-3 pb-2 mb-3">
-        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 logs-header">
-            <div>
-                <h1 class="h2 mb-0">
-                    <i class="bi bi-file-text me-2"></i>
-                    日志查看
-                </h1>
-                <p class="text-muted small mb-0 d-md-none">快速检索与下载关键日志信息</p>
-            </div>
-            <div class="d-flex flex-md-row flex-column w-100 w-md-auto logs-actions">
-                <button class="btn btn-outline-secondary btn-sm d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#logFilterContent" aria-expanded="false">
-                    <i class="bi bi-funnel me-2"></i>筛选
-                </button>
-                <div class="btn-toolbar d-none d-md-block">
+    <div class="card live-hero mb-4">
+        <div class="card-body">
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                <div>
+                    <div class="text-uppercase small fw-semibold text-info mb-1">Live Monitor</div>
+                    <h1 class="h3 mb-1 text-white">实时日志流</h1>
+                    <p class="mb-0 text-light opacity-75">不再只读文件，实时追踪运行输出并及时响应。</p>
+                </div>
+                <div class="d-flex flex-column align-items-start align-items-md-end gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="status-dot idle" id="liveStatusDot"></span>
+                        <div class="text-white">
+                            <div class="small text-white-50">实时状态</div>
+                            <div class="fw-semibold" id="liveStatusText">等待连接...</div>
+                        </div>
+                    </div>
                     <div class="btn-group">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshLogs()">
-                            <i class="bi bi-arrow-clockwise me-1"></i>
-                            刷新
+                        <button class="btn btn-light btn-sm" id="streamToggle" type="button">
+                            <i class="bi bi-play-fill me-1"></i>开启实时
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearLogs()">
-                            <i class="bi bi-trash me-1"></i>
-                            清空
+                        <button class="btn btn-outline-light btn-sm" id="reconnectStream" type="button">
+                            <i class="bi bi-arrow-repeat me-1"></i>重连
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="downloadLogs()">
-                            <i class="bi bi-download me-1"></i>
-                            下载
-                        </button>
-                    </div>
-                </div>
-                <div class="dropdown d-md-none">
-                    <button class="btn btn-outline-secondary btn-sm w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        操作
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end w-100">
-                        <li><button class="dropdown-item" type="button" onclick="refreshLogs()"><i class="bi bi-arrow-clockwise me-2"></i>刷新</button></li>
-                        <li><button class="dropdown-item" type="button" onclick="downloadLogs()"><i class="bi bi-download me-2"></i>下载</button></li>
-                        <li><button class="dropdown-item text-danger" type="button" onclick="clearLogs()"><i class="bi bi-trash me-2"></i>清空</button></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 日志控制面板 -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card log-filter-card">
-                <div class="card-body">
-                    <div class="row g-3 collapse show" id="logFilterContent">
-                        <!-- 日志文件选择 -->
-                        <div class="col-sm-6 col-lg-3">
-                            <label for="logFile" class="form-label">日志文件</label>
-                            <select class="form-select" id="logFile" onchange="loadLogPage(true)">
-                                <option value="">加载中...</option>
-                            </select>
-                        </div>
-
-                        <!-- 日志级别过滤 -->
-                        <div class="col-sm-6 col-lg-2">
-                            <label for="logLevel" class="form-label">日志级别</label>
-                            <select class="form-select" id="logLevel" onchange="filterLogs()">
-                                <option value="all">全部</option>
-                                <option value="debug">DEBUG</option>
-                                <option value="info">INFO</option>
-                                <option value="warning">WARNING</option>
-                                <option value="error">ERROR</option>
-                                <option value="critical">CRITICAL</option>
-                            </select>
-                        </div>
-
-                        <!-- 搜索框 -->
-                        <div class="col-sm-12 col-lg-4">
-                            <label for="searchInput" class="form-label">搜索内容</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control" id="searchInput" placeholder="输入关键词搜索...">
-                                <button class="btn btn-outline-secondary" type="button" onclick="searchLogs()">
-                                    <i class="bi bi-search"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- 自动滚动 -->
-                        <div class="col-sm-6 col-lg-2">
-                            <label for="autoScroll" class="form-label">&nbsp;</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="autoScroll" checked>
-                                <label class="form-check-label" for="autoScroll">
-                                    自动滚动
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- 实时监控 -->
-                        <div class="col-sm-6 col-lg-1">
-                            <label for="realtimeMode" class="form-label">&nbsp;</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="realtimeMode" onchange="toggleRealtime()">
-                                <label class="form-check-label" for="realtimeMode">
-                                    实时
-                                </label>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 日志统计信息 -->
-    <div class="row mb-4 g-2 log-stats">
+    <div class="card control-card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="logFile" class="form-label">日志源</label>
+                    <select class="form-select" id="logFile">
+                        <option value="">加载中...</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="logLevel" class="form-label">日志级别</label>
+                    <select class="form-select" id="logLevel">
+                        <option value="all">全部</option>
+                        <option value="debug">DEBUG</option>
+                        <option value="info">INFO</option>
+                        <option value="warning">WARNING</option>
+                        <option value="error">ERROR</option>
+                        <option value="critical">CRITICAL</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="searchInput" class="form-label">关键词</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="searchInput" placeholder="输入关键词并回车">
+                        <button class="btn btn-outline-secondary" type="button" onclick="applyFilters()">
+                            <i class="bi bi-funnel"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-2 d-flex align-items-center gap-3">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="autoScroll" checked>
+                        <label class="form-check-label" for="autoScroll">自动滚动</label>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <button class="btn btn-outline-secondary btn-sm" type="button" id="clearLogsBtn">
+                    <i class="bi bi-x-circle me-1"></i>清屏
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" id="downloadLogsBtn">
+                    <i class="bi bi-download me-1"></i>下载当前
+                </button>
+                <span class="text-muted small align-self-center">窗口保留最新 {{ maxLiveEntries|default(400) }} 条日志</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3 log-stats">
         <div class="col-6 col-sm-4 col-lg-2">
-            <div class="card">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <div class="fs-4 fw-bold text-primary" id="totalLogs">0</div>
-                    <div class="text-muted">总日志数</div>
+                    <div class="text-muted">总计</div>
                 </div>
             </div>
         </div>
         <div class="col-6 col-sm-4 col-lg-2">
-            <div class="card">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <div class="fs-4 fw-bold text-info" id="debugLogs">0</div>
                     <div class="text-muted">DEBUG</div>
@@ -182,7 +196,7 @@
             </div>
         </div>
         <div class="col-6 col-sm-4 col-lg-2">
-            <div class="card">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <div class="fs-4 fw-bold text-success" id="infoLogs">0</div>
                     <div class="text-muted">INFO</div>
@@ -190,7 +204,7 @@
             </div>
         </div>
         <div class="col-6 col-sm-4 col-lg-2">
-            <div class="card">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <div class="fs-4 fw-bold text-warning" id="warningLogs">0</div>
                     <div class="text-muted">WARNING</div>
@@ -198,7 +212,7 @@
             </div>
         </div>
         <div class="col-6 col-sm-4 col-lg-2">
-            <div class="card">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <div class="fs-4 fw-bold text-danger" id="errorLogs">0</div>
                     <div class="text-muted">ERROR</div>
@@ -206,7 +220,7 @@
             </div>
         </div>
         <div class="col-6 col-sm-4 col-lg-2">
-            <div class="card">
+            <div class="card stat-card">
                 <div class="card-body text-center">
                     <div class="fs-4 fw-bold text-danger" id="criticalLogs">0</div>
                     <div class="text-muted">CRITICAL</div>
@@ -215,48 +229,24 @@
         </div>
     </div>
 
-    <!-- 日志内容显示 -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-terminal me-2"></i>
-                        日志内容
-                    </h5>
-                    <div class="btn-group btn-group-sm">
-                        <button type="button" class="btn btn-outline-secondary" onclick="scrollToTop()">
-                            <i class="bi bi-arrow-up"></i>
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary" onclick="scrollToBottom()">
-                            <i class="bi bi-arrow-down"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="card-body p-0">
-                    <div class="log-container" id="logContainer">
-                        <div class="text-center p-4">
-                            <div class="loading-spinner"></div>
-                            <p class="mt-2">加载日志中...</p>
-                        </div>
-                    </div>
-                </div>
+    <div class="card live-console mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-terminal-dash text-primary"></i>
+                <span class="fw-semibold">实时输出</span>
+            </div>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary" onclick="scrollToBottom()">
+                    <i class="bi bi-arrow-down"></i>
+                </button>
             </div>
         </div>
-    </div>
-
-    <!-- 分页控制 -->
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div class="text-muted">
-                    显示 <span id="showingFrom">0</span> - <span id="showingTo">0</span> 条，共 <span id="totalCount">0</span> 条
+        <div class="card-body p-0">
+            <div class="log-feed" id="logContainer">
+                <div class="empty-state">
+                    <div class="spinner-border spinner-border-sm text-light" role="status"></div>
+                    <span class="text-muted">等待实时日志...</span>
                 </div>
-                <nav>
-                    <ul class="pagination pagination-sm mb-0" id="pagination">
-                        <!-- 分页按钮将动态生成 -->
-                    </ul>
-                </nav>
             </div>
         </div>
     </div>
@@ -271,9 +261,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div id="logDetailContent">
-                    <!-- 日志详情内容 -->
-                </div>
+                <div id="logDetailContent"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>

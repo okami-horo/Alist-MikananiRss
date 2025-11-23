@@ -292,6 +292,21 @@ class TestLogsAPI:
     async def test_stream_logs_endpoint(self, mock_service):
         """测试实时日志流端点返回SSE数据"""
 
+        mock_service.get_tail_entries.return_value = {
+            "entries": [
+                {
+                    "timestamp": "2025-10-10T10:05:00",
+                    "level": "INFO",
+                    "message": "Snapshot event",
+                    "module": None,
+                    "line_number": None,
+                    "thread_id": None,
+                }
+            ],
+            "total": 1,
+            "has_more": False,
+        }
+
         async def fake_stream_log_entries(*_, **__):
             yield LogEntry(
                 timestamp="2025-10-10T10:10:00",
@@ -305,18 +320,29 @@ class TestLogsAPI:
         mock_service.get_log_file_path.return_value = Path("app.log")
         mock_service.stream_log_entries.return_value = fake_stream_log_entries()
 
-        with self.client.stream("GET", "/api/logs/stream?file=app.log&poll_interval=0.1") as response:
+        with self.client.stream(
+            "GET",
+            "/api/logs/stream?file=app.log&poll_interval=0.1&level=INFO&initial_limit=1",
+        ) as response:
             assert response.status_code == 200
             lines = []
             for raw_line in response.iter_lines():
                 text_line = raw_line.decode() if isinstance(raw_line, bytes) else raw_line
                 lines.append(text_line)
-                if text_line.startswith("data: "):
-                    assert "Tail event" in text_line
+                if text_line.startswith("data: ") and "Tail event" in text_line:
                     break
 
         assert any(line.startswith("retry:") for line in lines)
-        mock_service.stream_log_entries.assert_called_once()
+        assert any(line.startswith("event: snapshot") for line in lines)
+        assert any("Tail event" in line for line in lines if isinstance(line, str))
+        mock_service.get_tail_entries.assert_called_once()
+        mock_service.stream_log_entries.assert_called_once_with(
+            file="app.log",
+            poll_interval=0.1,
+            start_at_end=True,
+            level="INFO",
+            search=None,
+        )
 
     @pytest.mark.asyncio
     @patch('alist_mikananirss.webui.api.logs.log_service')

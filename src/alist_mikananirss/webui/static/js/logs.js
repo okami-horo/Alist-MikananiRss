@@ -1,39 +1,30 @@
 let currentLogFile = "";
-let currentEntries = [];
+let liveEntries = [];
 let totalEntries = 0;
-let currentPage = 1;
-const logsPerPage = 100;
 let eventSource = null;
+let streamState = "idle";
+
+const maxLiveEntries = 400;
+const snapshotLimit = 200;
 
 document.addEventListener("DOMContentLoaded", () => {
     setActiveNav("logs");
-    collapseFiltersOnMobile();
-    bindSearchShortcut();
+    bindControls();
     loadLogFiles();
 });
 
-function collapseFiltersOnMobile() {
-    const filterContent = document.getElementById("logFilterContent");
-    if (!filterContent) {
-        return;
-    }
-
-    if (window.innerWidth <= 768 && filterContent.classList.contains("show")) {
-        const collapse = new bootstrap.Collapse(filterContent, { toggle: false });
-        collapse.hide();
-    }
-}
-
-function bindSearchShortcut() {
-    const searchInput = document.getElementById("searchInput");
-    if (!searchInput) {
-        return;
-    }
-    searchInput.addEventListener("keypress", (event) => {
+function bindControls() {
+    document.getElementById("logLevel")?.addEventListener("change", applyFilters);
+    document.getElementById("searchInput")?.addEventListener("keypress", (event) => {
         if (event.key === "Enter") {
-            filterLogs();
+            applyFilters();
         }
     });
+    document.getElementById("streamToggle")?.addEventListener("click", toggleStream);
+    document.getElementById("reconnectStream")?.addEventListener("click", () => startStream(true));
+    document.getElementById("clearLogsBtn")?.addEventListener("click", clearLogs);
+    document.getElementById("downloadLogsBtn")?.addEventListener("click", downloadLogs);
+    document.getElementById("logFile")?.addEventListener("change", () => startStream(true));
 }
 
 async function loadLogFiles() {
@@ -49,6 +40,7 @@ async function loadLogFiles() {
         if (!Array.isArray(files) || files.length === 0) {
             select.innerHTML = '<option value="">暂无日志文件</option>';
             renderEmptyState("logContainer", "暂无可用日志文件");
+            updateStreamStatus("idle", "等待文件");
             return;
         }
 
@@ -56,7 +48,8 @@ async function loadLogFiles() {
         files.forEach((file) => {
             const option = document.createElement("option");
             option.value = file.name;
-            option.textContent = `${file.name} (${formatFileSize(file.size)})`;
+            const modified = file.modified_time ? ` · ${formatTime(file.modified_time)}` : "";
+            option.textContent = `${file.name} (${formatFileSize(file.size)})${modified}`;
             select.appendChild(option);
         });
 
@@ -65,32 +58,50 @@ async function loadLogFiles() {
         }
         select.value = currentLogFile;
 
-        await loadLogPage(true);
+        startStream(true);
     } catch (error) {
         select.innerHTML = '<option value="">加载失败</option>';
         renderError("logContainer", `加载日志文件列表失败: ${error.message}`);
+        updateStreamStatus("error", "加载失败");
         showNotification("加载日志文件列表失败", "danger");
     }
 }
 
-async function loadLogPage(resetPage = false) {
+function applyFilters() {
+    startStream(true);
+}
+
+function toggleStream() {
+    if (streamState === "live" || streamState === "connecting") {
+        stopStream(false);
+        updateStreamStatus("paused", "已暂停");
+    } else {
+        startStream(false);
+    }
+}
+
+function startStream(resetBuffer = true) {
     if (!currentLogFile) {
         return;
     }
 
-    if (resetPage) {
-        currentPage = 1;
-    }
+    stopStream(false);
+    updateStreamStatus("connecting", "正在连接...");
 
-    const level = getSelectedLevel();
-    const searchTerm = getSearchTerm();
-    const offset = (currentPage - 1) * logsPerPage;
+    if (resetBuffer) {
+        liveEntries = [];
+        totalEntries = 0;
+        renderLiveEntries();
+        updateStatistics();
+    }
 
     const params = new URLSearchParams({
         file: currentLogFile,
-        limit: logsPerPage,
-        offset,
+        poll_interval: 1,
+        initial_limit: snapshotLimit,
     });
+    const level = getSelectedLevel();
+    const searchTerm = getSearchTerm();
     if (level) {
         params.append("level", level);
     }
@@ -98,56 +109,87 @@ async function loadLogPage(resetPage = false) {
         params.append("search", searchTerm);
     }
 
-    try {
-        const data = await apiCall(`/api/public/logs/content?${params.toString()}`);
-        currentEntries = data.entries || [];
-        totalEntries = data.total || 0;
+    eventSource = new EventSource(`/api/public/logs/stream?${params.toString()}`);
 
-        renderLogEntries();
+    eventSource.addEventListener("snapshot", (event) => {
+        const payload = safeParse(event.data) || {};
+        liveEntries = Array.isArray(payload.entries) ? payload.entries : [];
+        totalEntries = payload.total ?? liveEntries.length;
+        renderLiveEntries(true);
         updateStatistics();
-        updatePagination();
-    } catch (error) {
-        renderError("logContainer", `加载日志失败: ${error.message}`);
-        showNotification(`加载日志失败: ${error.message}`, "danger");
+        updateStreamStatus("live", "实时跟随");
+    });
+
+    eventSource.onmessage = (event) => {
+        const entry = safeParse(event.data);
+        if (!entry) {
+            return;
+        }
+        appendEntry(entry);
+    };
+
+    eventSource.onerror = () => {
+        updateStreamStatus("error", "连接断开");
+        stopStream(false);
+        showNotification("实时连接已断开，请点击重连。", "warning");
+    };
+}
+
+function stopStream(clearState = true) {
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+    }
+    if (clearState) {
+        updateStreamStatus("idle", "等待连接");
     }
 }
 
-function renderLogEntries() {
+function appendEntry(entry) {
+    liveEntries.push(entry);
+    totalEntries += 1;
+
+    if (liveEntries.length > maxLiveEntries) {
+        liveEntries.shift();
+    }
+
+    renderLiveEntries();
+    updateStatistics();
+}
+
+function renderLiveEntries(forceScroll = false) {
     const container = document.getElementById("logContainer");
     if (!container) {
         return;
     }
 
-    if (!currentEntries.length) {
-        renderEmptyState("logContainer", "暂无日志内容");
-        updatePagination();
-        updateStatistics();
+    if (!liveEntries.length) {
+        renderEmptyState("logContainer", "等待实时日志...");
         return;
     }
 
-    container.innerHTML = currentEntries
+    container.innerHTML = liveEntries
         .map((log) => {
             const message = escapeHtml(log.message || "");
             return `
-                <div class="log-entry log-level-${log.level}" onclick="showLogDetail('${log.timestamp}', '${log.level}', '${message.replace(/'/g, "\\'")}')">
-                    <div class="d-flex justify-content-between">
-                        <span class="text-muted">[${formatTime(log.timestamp)}]</span>
-                        <span class="badge bg-${getLevelColor(log.level)}">${log.level}</span>
-                    </div>
-                    <div class="mt-1">${message}</div>
+                <div class="log-line log-level-${log.level || "INFO"}" onclick="showLogDetail('${log.timestamp}', '${log.level}', '${message.replace(/'/g, "\\'")}')">
+                    <span class="log-time">[${formatTime(log.timestamp)}]</span>
+                    <span class="log-level badge bg-${getLevelColor(log.level)}">${log.level}</span>
+                    <span class="log-message">${message}</span>
                 </div>
             `;
         })
         .join("");
 
-    if (document.getElementById("autoScroll")?.checked) {
-        setTimeout(() => scrollToBottom(), 100);
+    const shouldScroll = forceScroll || document.getElementById("autoScroll")?.checked;
+    if (shouldScroll) {
+        scrollToBottom();
     }
 }
 
 function updateStatistics() {
     const stats = {
-        total: totalEntries,
+        total: totalEntries || liveEntries.length,
         debug: 0,
         info: 0,
         warning: 0,
@@ -155,7 +197,7 @@ function updateStatistics() {
         critical: 0,
     };
 
-    currentEntries.forEach((log) => {
+    liveEntries.forEach((log) => {
         const level = (log.level || "").toLowerCase();
         if (stats[level] !== undefined) {
             stats[level] += 1;
@@ -170,76 +212,12 @@ function updateStatistics() {
     document.getElementById("criticalLogs").textContent = stats.critical;
 }
 
-function updatePagination() {
-    const pagination = document.getElementById("pagination");
-    if (!pagination) {
-        return;
-    }
-
-    const totalPages = totalEntries > 0 ? Math.ceil(totalEntries / logsPerPage) : 1;
-    const safePage = Math.min(Math.max(currentPage, 1), totalPages);
-    if (safePage !== currentPage) {
-        currentPage = safePage;
-    }
-
-    const start = totalEntries === 0 ? 0 : (currentPage - 1) * logsPerPage + 1;
-    const end = Math.min(currentPage * logsPerPage, totalEntries);
-
-    document.getElementById("showingFrom").textContent = start;
-    document.getElementById("showingTo").textContent = end;
-    document.getElementById("totalCount").textContent = totalEntries;
-
-    let paginationHTML = "";
-    paginationHTML += `
-        <li class="page-item ${currentPage === 1 ? "disabled" : ""}">
-            <a class="page-link" href="#" onclick="changePage(${currentPage - 1}); return false;">上一页</a>
-        </li>
-    `;
-
-    const pagesToShow = Math.min(totalPages, 10);
-    for (let i = 1; i <= pagesToShow; i += 1) {
-        paginationHTML += `
-            <li class="page-item ${i === currentPage ? "active" : ""}">
-                <a class="page-link" href="#" onclick="changePage(${i}); return false;">${i}</a>
-            </li>
-        `;
-    }
-
-    paginationHTML += `
-        <li class="page-item ${currentPage === totalPages || totalPages === 0 ? "disabled" : ""}">
-            <a class="page-link" href="#" onclick="changePage(${currentPage + 1}); return false;">下一页</a>
-        </li>
-    `;
-
-    pagination.innerHTML = paginationHTML;
-}
-
-function changePage(page) {
-    const totalPages = totalEntries > 0 ? Math.ceil(totalEntries / logsPerPage) : 1;
-    if (page < 1 || page > totalPages) {
-        return;
-    }
-    currentPage = page;
-    loadLogPage(false);
-}
-
-function filterLogs() {
-    currentPage = 1;
-    loadLogPage(true);
-}
-
-function searchLogs() {
-    filterLogs();
-}
-
 function clearLogs() {
-    confirmAction("确定要清空当前显示的日志吗？", () => {
-        currentEntries = [];
+    confirmAction("确定要清空当前实时窗口吗？", () => {
+        liveEntries = [];
         totalEntries = 0;
-        renderLogEntries();
+        renderLiveEntries();
         updateStatistics();
-        updatePagination();
-        showNotification("日志已清空", "success");
     });
 }
 
@@ -257,61 +235,35 @@ async function downloadLogs() {
     }
 }
 
-function refreshLogs() {
-    loadLogPage(true);
-    showNotification("日志已刷新", "info");
-}
+function updateStreamStatus(state, label) {
+    streamState = state;
 
-function toggleRealtime() {
-    const enabled = document.getElementById("realtimeMode")?.checked;
-    if (enabled) {
-        startRealtimeMode();
-    } else {
-        stopRealtimeMode();
+    const statusText = document.getElementById("liveStatusText");
+    const statusDot = document.getElementById("liveStatusDot");
+    const toggle = document.getElementById("streamToggle");
+
+    const config = {
+        idle: { text: label || "等待连接", dot: "idle", btnText: "开启实时" },
+        connecting: { text: label || "正在连接...", dot: "connecting", btnText: "暂停实时" },
+        live: { text: label || "实时跟随", dot: "live", btnText: "暂停实时" },
+        paused: { text: label || "已暂停", dot: "paused", btnText: "恢复实时" },
+        error: { text: label || "连接异常", dot: "error", btnText: "重试连接" },
+    };
+
+    const stateConfig = config[state] || config.idle;
+
+    if (statusText) {
+        statusText.textContent = stateConfig.text;
     }
-}
 
-function startRealtimeMode() {
-    if (!currentLogFile) {
-        showNotification("请先选择日志文件", "warning");
-        document.getElementById("realtimeMode").checked = false;
-        return;
+    if (statusDot) {
+        statusDot.className = `status-dot ${stateConfig.dot}`;
     }
 
-    stopRealtimeMode();
-
-    try {
-        eventSource = new EventSource(`/api/public/logs/stream?file=${encodeURIComponent(currentLogFile)}`);
-        eventSource.onmessage = (event) => {
-            const newLog = JSON.parse(event.data);
-            currentEntries.push(newLog);
-            totalEntries += 1;
-
-            if (currentEntries.length > logsPerPage) {
-                currentEntries.shift();
-            }
-
-            renderLogEntries();
-            updateStatistics();
-            updatePagination();
-        };
-
-        eventSource.onerror = () => {
-            showNotification("实时连接断开", "warning");
-            stopRealtimeMode();
-        };
-
-        showNotification("实时监控已开启", "success");
-    } catch (error) {
-        showNotification(`开启实时监控失败: ${error.message}`, "danger");
-        document.getElementById("realtimeMode").checked = false;
-    }
-}
-
-function stopRealtimeMode() {
-    if (eventSource) {
-        eventSource.close();
-        eventSource = null;
+    if (toggle) {
+        toggle.textContent = stateConfig.btnText;
+        toggle.classList.toggle("btn-danger", state === "error");
+        toggle.classList.toggle("btn-primary", state !== "error");
     }
 }
 
@@ -321,9 +273,9 @@ function renderEmptyState(containerId, message) {
         return;
     }
     container.innerHTML = `
-        <div class="text-center p-4">
-            <i class="bi bi-inbox fs-1 text-muted"></i>
-            <p class="text-muted mt-2 mb-0">${message}</p>
+        <div class="empty-state">
+            <i class="bi bi-broadcast-pin fs-3 text-muted me-2"></i>
+            <span class="text-muted">${message}</span>
         </div>
     `;
 }
@@ -370,13 +322,6 @@ function showLogDetail(timestamp, level, message) {
     new bootstrap.Modal(modalElement).show();
 }
 
-function scrollToTop() {
-    const container = document.getElementById("logContainer");
-    if (container) {
-        container.scrollTop = 0;
-    }
-}
-
 function scrollToBottom() {
     const container = document.getElementById("logContainer");
     if (container) {
@@ -421,6 +366,14 @@ function getSearchTerm() {
     return (input?.value || "").trim();
 }
 
+function safeParse(text) {
+    try {
+        return JSON.parse(text);
+    } catch (err) {
+        return null;
+    }
+}
+
 window.addEventListener("beforeunload", () => {
-    stopRealtimeMode();
+    stopStream();
 });

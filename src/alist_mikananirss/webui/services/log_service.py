@@ -20,6 +20,7 @@ USER_DATA_LOG_DIR = Path.home() / ".alist-mikananirss" / "log"
 DEFAULT_MAX_FILES = 4
 DEFAULT_MAX_ENTRIES = 1200
 DEFAULT_PAGE_LIMIT = 500
+DEFAULT_STREAM_SNAPSHOT_LIMIT = 200
 logger = logging.getLogger(__name__)
 
 
@@ -149,6 +150,24 @@ class LogService:
             "has_more": len(filtered) > len(limited),
         }
 
+    async def get_tail_entries(
+        self,
+        file: str,
+        limit: int = DEFAULT_STREAM_SNAPSHOT_LIMIT,
+        level: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> Dict[str, object]:
+        """Return the most recent log entries for bootstrapping live streams."""
+        resolved_limit = min(max(limit, 1), max(DEFAULT_PAGE_LIMIT, DEFAULT_MAX_ENTRIES))
+        entries = await asyncio.to_thread(self._load_entries, file)
+        filtered = self._filter_entries(entries, level=level, search=search)
+        tail = filtered[-resolved_limit:]
+        return {
+            "entries": [entry.model_dump() for entry in tail],
+            "total": len(filtered),
+            "has_more": len(filtered) > len(tail),
+        }
+
     async def get_log_file_path(self, file_name: str) -> Optional[Path]:
         path = self._safe_join_log_dir(file_name)
         return path if path.exists() and path.is_file() else None
@@ -172,6 +191,8 @@ class LogService:
         file: str,
         poll_interval: float = 1.0,
         start_at_end: bool = True,
+        level: Optional[str] = None,
+        search: Optional[str] = None,
     ) -> AsyncGenerator[LogEntry, None]:
         """Yield log entries as they are appended to the requested log file."""
         path = self._get_log_file_path(file)
@@ -200,7 +221,7 @@ class LogService:
 
                 for line in lines:
                     parsed = self._parse_log_line(line)
-                    if parsed:
+                    if parsed and self.matches_filters(parsed, level=level, search=search):
                         yield parsed
 
                 await asyncio.sleep(poll_interval)
@@ -222,6 +243,38 @@ class LogService:
 
         return lines, new_position
 
+    def matches_filters(
+        self,
+        entry: LogEntry,
+        level: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> bool:
+        """Public helper to test whether an entry satisfies level/search filters."""
+        return self._matches_filters(entry, level, search, normalised=False)
+
+    def _matches_filters(
+        self,
+        entry: LogEntry,
+        level: Optional[str],
+        search: Optional[str],
+        normalised: bool = False,
+    ) -> bool:
+        level_upper = level if normalised else level.upper() if level else None
+        search_lower = search if normalised else search.lower() if search else None
+        if level_upper and (entry.level or "").upper() != level_upper:
+            return False
+        if search_lower:
+            haystacks: List[str] = []
+            if entry.message:
+                haystacks.append(entry.message.lower())
+            if entry.level:
+                haystacks.append(entry.level.lower())
+            if entry.module:
+                haystacks.append(entry.module.lower())
+            if search_lower not in " ".join(haystacks):
+                return False
+        return True
+
     def _filter_entries(
         self,
         entries: List[LogEntry],
@@ -232,17 +285,8 @@ class LogService:
         search_lower = search.lower() if search else None
         filtered: List[LogEntry] = []
         for entry in entries:
-            if level_upper and entry.level != level_upper:
-                continue
-            if search_lower:
-                haystacks = [entry.message.lower()]
-                if entry.level:
-                    haystacks.append(entry.level.lower())
-                if entry.module:
-                    haystacks.append(entry.module.lower())
-                if search_lower not in " ".join(haystacks):
-                    continue
-            filtered.append(entry)
+            if self._matches_filters(entry, level_upper, search_lower, normalised=True):
+                filtered.append(entry)
         return filtered
 
     def _collect_all_entries(self, max_files: int = DEFAULT_MAX_FILES, max_entries: Optional[int] = DEFAULT_MAX_ENTRIES) -> List[LogEntry]:

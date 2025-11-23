@@ -317,6 +317,20 @@ class TestLogService:
                 assert content["has_more"] is True
 
     @pytest.mark.asyncio
+    async def test_get_tail_entries(self, log_service, sample_log_file):
+        """流式快照只返回末尾并保留过滤与has_more信息"""
+        log_dir = Path(sample_log_file).parent
+        file_name = os.path.basename(sample_log_file)
+
+        with patch.object(log_service, 'log_dir', log_dir):
+            tail = await log_service.get_tail_entries(file_name, limit=2, level="INFO")
+
+        assert tail["total"] == 3
+        assert tail["has_more"] is True
+        assert len(tail["entries"]) == 2
+        assert "Connection established" in tail["entries"][-1]["message"]
+
+    @pytest.mark.asyncio
     async def test_get_log_content_missing_file(self, log_service):
         """缺少日志文件时返回清晰错误"""
         with patch.object(log_service, 'log_dir', Path('/non-existent')):

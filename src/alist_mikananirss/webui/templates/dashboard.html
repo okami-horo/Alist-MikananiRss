@@ -302,7 +302,7 @@
             </div>
             <div class="card-body">
                 <div class="mb-3">
-                    <span class="metric-label d-block mb-2">主程序状态</span>
+                    <span class="metric-label d-block mb-2">订阅服务状态</span>
                     <div id="systemControls" class="control-actions">
                         <div class="empty-placeholder">
                             <div class="loading-spinner"></div>
@@ -310,7 +310,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="metric-note">可在此启动、停止或重启订阅任务。</div>
+                <div class="metric-note">可在此启动、停止或重启订阅服务。</div>
             </div>
         </div>
 
@@ -376,11 +376,11 @@
         if (status.status === 'running') {
             dot.className = 'status-dot status-dot--active';
             text.textContent = '运行中';
-            summary.textContent = '主程序已启动并保持监控。';
+            summary.textContent = '订阅服务已启动并保持监控。';
         } else if (status.status === 'stopped') {
             dot.className = 'status-dot status-dot--inactive';
             text.textContent = '已停止';
-            summary.textContent = '主程序已停止，可根据需要重新启动。';
+            summary.textContent = '订阅服务已停止，可根据需要重新启动。';
         } else {
             dot.className = 'status-dot status-dot--unknown';
             text.textContent = '未知状态';
@@ -419,16 +419,16 @@
         if (status === 'running') {
             container.innerHTML = `
                 <button class="btn btn-danger" onclick="stopSystem()">
-                    <i class="bi bi-stop-circle me-2"></i>停止主程序
+                    <i class="bi bi-stop-circle me-2"></i>停止服务
                 </button>
                 <button class="btn btn-warning" onclick="restartSystem()">
-                    <i class="bi bi-arrow-repeat me-2"></i>重启主程序
+                    <i class="bi bi-arrow-repeat me-2"></i>重启服务
                 </button>
             `;
         } else {
             container.innerHTML = `
                 <button class="btn btn-primary" onclick="startSystem()">
-                    <i class="bi bi-play-circle me-2"></i>启动主程序
+                    <i class="bi bi-play-circle me-2"></i>启动服务
                 </button>
             `;
         }
@@ -494,11 +494,11 @@
     }
 
     async function startSystem() {
-        confirmAction('确定要启动主程序吗？', async () => {
+        confirmAction('确定要启动服务吗？', async () => {
             try {
-                showNotification('正在启动主程序...', 'info');
+                showNotification('正在启动服务...', 'info');
                 await apiCall('/api/admin/system/start', { method: 'POST' });
-                showNotification('主程序启动成功', 'success');
+                showNotification('服务启动成功', 'success');
                 await loadDashboard();
             } catch (error) {
                 showNotification('启动失败: ' + error.message, 'danger');
@@ -507,11 +507,11 @@
     }
 
     async function stopSystem() {
-        confirmAction('确定要停止主程序吗？', async () => {
+        confirmAction('确定要停止服务吗？', async () => {
             try {
-                showNotification('正在停止主程序...', 'info');
+                showNotification('正在停止服务...', 'info');
                 await apiCall('/api/admin/system/stop', { method: 'POST' });
-                showNotification('主程序停止成功', 'success');
+                showNotification('服务停止成功', 'success');
                 await loadDashboard();
             } catch (error) {
                 showNotification('停止失败: ' + error.message, 'danger');
@@ -520,11 +520,11 @@
     }
 
     async function restartSystem() {
-        confirmAction('确定要重启主程序吗？', async () => {
+        confirmAction('确定要重启服务吗？', async () => {
             try {
-                showNotification('正在重启主程序...', 'info');
+                showNotification('正在重启服务...', 'info');
                 await apiCall('/api/admin/system/restart', { method: 'POST' });
-                showNotification('主程序重启成功', 'success');
+                showNotification('服务重启成功', 'success');
                 await loadDashboard();
             } catch (error) {
                 showNotification('重启失败: ' + error.message, 'danger');

@@ -164,18 +164,41 @@ async def search_logs(
 async def stream_logs(
     file: str = Query(..., description="log file name to follow"),
     poll_interval: float = Query(1.0, ge=0.1, le=5.0),
+    level: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    initial_limit: int = Query(200, ge=1, le=1000),
 ) -> StreamingResponse:
+    parsed_level = _parse_level(level)
     path = await _resolve(log_service.get_log_file_path(file))
     if path is None:
         raise HTTPException(404, f"Log file '{file}' not found")
 
+    try:
+        snapshot = _normalise_entries_payload(
+            await _resolve(
+                log_service.get_tail_entries(
+                    file=file,
+                    limit=initial_limit,
+                    level=parsed_level.value if parsed_level else None,
+                    search=search,
+                )
+            )
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(500, f"Unable to bootstrap log stream: {exc}") from exc
+
     async def event_stream():
         yield "retry: 5000\n\n"
+        yield f"event: snapshot\ndata: {json.dumps(snapshot)}\n\n"
         try:
             async for entry in log_service.stream_log_entries(
                 file=file,
                 poll_interval=poll_interval,
                 start_at_end=True,
+                level=parsed_level.value if parsed_level else None,
+                search=search,
             ):
                 payload = json.dumps(entry.model_dump())
                 yield f"data: {payload}\n\n"
