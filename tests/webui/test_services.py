@@ -69,6 +69,22 @@ class TestSystemService:
             assert status.uptime == "0:00:00"
 
     @pytest.mark.asyncio
+    async def test_get_system_status_recovers_invalid_pid_file(self, tmp_path, monkeypatch, system_service):
+        """损坏的PID文件不会阻塞状态查询"""
+        bad_pid = tmp_path / "alist.pid"
+        bad_pid.write_text("not-a-pid", encoding="utf-8")
+        import importlib
+
+        system_module = importlib.import_module("alist_mikananirss.webui.services.system_service")
+        monkeypatch.setattr(system_module, "PID_FILE", bad_pid)
+
+        with patch.object(system_service, "_matches_target_process", return_value=False):
+            status = await system_service.get_system_status()
+
+        assert status.status == "stopped"
+        assert not bad_pid.exists()
+
+    @pytest.mark.asyncio
     async def test_start_system(self, system_service):
         """测试启动系统"""
         with patch('subprocess.Popen') as mock_popen, \
@@ -456,6 +472,21 @@ class TestConfigService:
             assert "alist" in config
             assert config["common"]["interval_time"] == 300
             assert config["alist"]["base_url"] == "http://localhost:5244"
+
+    @pytest.mark.asyncio
+    async def test_get_current_config_recovers_corrupted_file(self, tmp_path, config_service, monkeypatch):
+        """损坏的配置文件会自动备份并回退到默认配置"""
+        cfg_path = tmp_path / "config.yaml"
+        cfg_path.write_text("::invalid::yaml", encoding="utf-8")
+        monkeypatch.setattr(config_service, "config_file", cfg_path)
+
+        config = await config_service.get_current_config()
+
+        meta = config.get("_meta", {})
+        assert meta.get("needs_setup") is True
+        assert meta.get("recovered_from_error") is True
+        backup_path = cfg_path.with_suffix(".yaml.backup")
+        assert backup_path.exists()
 
     @pytest.mark.asyncio
     async def test_validate_config_valid(self, config_service):

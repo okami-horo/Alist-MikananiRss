@@ -121,7 +121,7 @@
 
     async function loadManualDefaults() {
         try {
-            const config = await apiCall('/api/config/current');
+            const config = await apiCall('/api/admin/config/current');
             const webdavManual = config?.webdav?.manual || {};
 
             manualDefaults = {
@@ -182,7 +182,7 @@
         };
 
         try {
-            await apiCall('/api/config/save', {
+            await apiCall('/api/admin/config/save', {
                 method: 'POST',
                 body: JSON.stringify(payload),
             });
@@ -234,7 +234,7 @@
                 conflict_strategy: conflictStrategy,
             };
 
-            const response = await apiCall('/api/webdav/manual-fix', {
+            const response = await apiCall('/api/admin/webdav/manual-fix', {
                 method: 'POST',
                 body: JSON.stringify(payload),
             });
@@ -337,7 +337,7 @@
             return;
         }
         try {
-            const job = await apiCall(`/api/webdav/jobs/${encodeURIComponent(currentJobId)}`);
+            const job = await apiCall(`/api/admin/webdav/jobs/${encodeURIComponent(currentJobId)}`);
             renderJobStatus(job);
             if (job.status === 'completed' || job.status === 'failed') {
                 stopJobPolling();

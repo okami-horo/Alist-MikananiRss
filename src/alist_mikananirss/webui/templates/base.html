@@ -548,7 +548,7 @@
         // 系统信息显示
         async function showSystemInfo() {
             try {
-                const info = await apiCall('/api/system/status');
+                const info = await apiCall('/api/public/system/status');
                 const modal = new bootstrap.Modal(document.getElementById('systemInfoModal'));
 
                 document.getElementById('systemInfoContent').innerHTML = `

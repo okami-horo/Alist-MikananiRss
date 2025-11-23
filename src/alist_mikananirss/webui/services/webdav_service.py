@@ -80,6 +80,18 @@ class WebDAVService:
         )
         task.add_done_callback(self._log_task_exception)
 
+        logger.info(
+            "Manual WebDAV fix job queued",
+            extra={
+                "action": "webdav_manual_fix",
+                "job_id": job.id,
+                "target_dir": target_dir,
+                "dry_run": dry_run,
+                "recursive": effective_recursive,
+                "conflict_strategy": effective_conflict,
+            },
+        )
+
         return job
 
     async def run_manual_fix(

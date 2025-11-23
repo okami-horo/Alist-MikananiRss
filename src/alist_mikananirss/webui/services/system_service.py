@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -18,6 +19,7 @@ from ..models import ProcessInfo, SystemStatus
 
 DEFAULT_VERSION = "0.5.5"
 PID_FILE = Path("alist_mikananirss.pid")
+logger = logging.getLogger(__name__)
 
 
 class SystemService:
@@ -74,10 +76,18 @@ class SystemService:
         """Attempt to start the main application process."""
         async with self._lock:
             if self._is_main_process_running():
+                logger.info(
+                    "WebUI requested start skipped because system already running",
+                    extra={"action": "system_start", "status": "already_running", "module": self.main_module},
+                )
                 return {"success": False, "message": "System already running"}
 
             python_executable = sys.executable or shutil.which("python") or "python"
             try:
+                logger.info(
+                    "Starting system process",
+                    extra={"action": "system_start", "module": self.main_module, "executable": python_executable},
+                )
                 process = subprocess.Popen(  # nosec B603 - launched intentionally for tests
                     [python_executable, "-m", self.main_module],
                     stdout=subprocess.DEVNULL,
@@ -98,6 +108,10 @@ class SystemService:
             if isinstance(poll_result, int):
                 self._managed_pid = None
                 self._last_error = None
+                logger.warning(
+                    "System process exited immediately",
+                    extra={"action": "system_start", "return_code": poll_result},
+                )
                 return {
                     "success": False,
                     "message": (
@@ -109,12 +123,20 @@ class SystemService:
             self._status = "running"
             self._start_time = datetime.datetime.now(datetime.timezone.utc)
             self._last_error = None
+            logger.info(
+                "System process started",
+                extra={"action": "system_start", "status": "running", "pid": self._managed_pid},
+            )
             return {"success": True, "message": "System started"}
 
     async def stop_system(self) -> Dict[str, object]:
         """Attempt to terminate the main application process."""
         async with self._lock:
             if not self._is_main_process_running():
+                logger.info(
+                    "WebUI requested stop while system already stopped",
+                    extra={"action": "system_stop", "status": "not_running"},
+                )
                 return {"success": False, "message": "System not running"}
 
             process = self._get_main_process()
@@ -122,6 +144,10 @@ class SystemService:
                 self._status = "stopped"
                 self._start_time = None
                 self._persist_pid(None)
+                logger.info(
+                    "System stop request completed without active process",
+                    extra={"action": "system_stop", "status": "stopped"},
+                )
                 return {"success": True, "message": "System stopped"}
 
             try:
@@ -137,10 +163,15 @@ class SystemService:
             self._managed_pid = None
             self._persist_pid(None)
             self._last_error = None
+            logger.info(
+                "System process stopped",
+                extra={"action": "system_stop", "status": "stopped", "pid": getattr(process, 'pid', None)},
+            )
             return {"success": True, "message": "System stopped"}
 
     async def restart_system(self) -> Dict[str, object]:
         """Stop then start the system."""
+        logger.info("Restarting system process", extra={"action": "system_restart", "module": self.main_module})
         stop_result = await self.stop_system()
         if not stop_result.get("success") and stop_result.get("message") != "System not running":
             return stop_result
@@ -148,6 +179,10 @@ class SystemService:
         start_result = await self.start_system()
         if start_result.get("success"):
             start_result["message"] = "System restarted"
+            logger.info(
+                "System restart completed",
+                extra={"action": "system_restart", "status": "running", "pid": self._managed_pid},
+            )
         return start_result
 
     async def health_check(self) -> bool:

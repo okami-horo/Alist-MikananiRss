@@ -85,7 +85,7 @@
 - [x] T026 [P] [US3] 实现 WebDAV 手动修复服务封装，负责调用底层修复脚本/逻辑并返回结构化结果；对于可能长时间运行的修复过程，以 Job 形式管理并对外暴露 Job 状态（src/alist_mikananirss/webui/services/webdav_service.py）
 - [x] T027 [US3] 检查并完善 `/api/webdav/manual-fix` 路由的请求校验、错误映射和响应模型，使其在长任务场景下返回 Job ID，并提供基于 Job ID 的状态查询接口以满足 FR-008 要求（src/alist_mikananirss/webui/api/webdav.py）
 - [x] T028 [US3] 为 WebDAV 手动修复页面实现表单与结果展示，包括预览与实际执行模式，并在 UI 中展示 Job 状态与最终结果（src/alist_mikananirss/webui/templates/webdav_manual.html）
-- [ ] T029 [US3] 在 WebUI 集成测试中增加“WebDAV 嵌套修复（预览+执行）”场景覆盖，验证长时间运行的修复任务以 Job 形式返回 Job ID 且可通过轮询接口查询状态，并优先通过该用例驱动 Job 管理与 UI/API 行为的实现（Test-First）（tests/webui/test_integration.py）
+- [x] T029 [US3] 在 WebUI 集成测试中增加“WebDAV 嵌套修复（预览+执行）”场景覆盖，验证长时间运行的修复任务以 Job 形式返回 Job ID 且可通过轮询接口查询状态，并优先通过该用例驱动 Job 管理与 UI/API 行为的实现（Test-First）（tests/webui/test_integration.py）
 - [x] T039 [P] [US3] 根据 data-model 中 `WebdavManualFixJob` 定义梳理并实现 WebUI 层 Job 模型与状态存储（创建/运行中/完成/失败），并为后续其他长时间操作复用该 Job 管理机制（src/alist_mikananirss/webui/services/webdav_service.py）
 
 **Checkpoint**: 维护者可以通过 WebUI 日志页面和 WebDAV 页面完成问题排查与目录修复，相关路径有自动化测试覆盖。
@@ -100,10 +100,10 @@
 
 ### Implementation for User Story 4
 
-- [ ] T032 [US4] 在 WebUI 集成测试中增加多终端状态一致性和只读访问的模拟场景，在调整路由前缀、访问控制与前端布局前先锁定多终端行为预期（Test-First）（tests/webui/test_integration.py）
-- [ ] T030 [P] [US4] 为只读视图和敏感操作 API 划分清晰的 URL 前缀与标签，便于反向代理基于路径做访问控制（src/alist_mikananirss/webui/server.py）
-- [ ] T031 [P] [US4] 在仪表盘和日志页面中优化响应式布局，确保在手机和平板上展示良好（src/alist_mikananirss/webui/templates/dashboard.html）
-- [ ] T033 [US4] 在 Quickstart 与 README 中补充关于反向代理/ACL 的推荐配置示例，说明只读与敏感操作路径的保护方式（specs/001-webui-backend-refactor/quickstart.md）
+- [x] T032 [US4] 在 WebUI 集成测试中增加多终端状态一致性和只读访问的模拟场景，在调整路由前缀、访问控制与前端布局前先锁定多终端行为预期（Test-First）（tests/webui/test_integration.py）
+- [x] T030 [P] [US4] 为只读视图和敏感操作 API 划分清晰的 URL 前缀与标签，便于反向代理基于路径做访问控制（src/alist_mikananirss/webui/server.py）
+- [x] T031 [P] [US4] 在仪表盘和日志页面中优化响应式布局，确保在手机和平板上展示良好（src/alist_mikananirss/webui/templates/dashboard.html）
+- [x] T033 [US4] 在 Quickstart 与 README 中补充关于反向代理/ACL 的推荐配置示例，说明只读与敏感操作路径的保护方式（specs/001-webui-backend-refactor/quickstart.md）
 
 **Checkpoint**: WebUI 在不同终端展示正确，敏感操作的 API 路由约定清晰，文档中给出部署层访问控制建议。
 
@@ -113,11 +113,11 @@
 
 **Purpose**: 跨用户故事的改进，包括错误处理、日志、性能和文档完善。
 
-- [ ] T034 [P] 梳理 WebUI 和核心模块中的关键日志点，确保重要操作（启停系统、保存配置、WebDAV 修复等）都有结构化日志（src/alist_mikananirss/webui/services/system_service.py）
-- [ ] T035 [P] 根据 SC-002 要求，对系统状态与日志接口进行简单性能分析和优化（如分页/limit 默认值），通过编写简易基准/压测脚本多次调用 `/api/system/status` 与日志接口并统计 95% 请求延迟，基于结果调整实现以避免一次请求加载过多数据（src/alist_mikananirss/webui/api/logs.py）
-- [ ] T036 审查并补充 WebUI 相关测试用例，覆盖主要错误路径与边界条件，例如：后端主进程未启动时 WebUI 行为、`config.yaml` 缺失或损坏时的引导配置模式、长时间运行的 WebDAV Job 执行中/失败/刷新页面后的状态恢复等（tests/webui/test_services.py）
-- [ ] T037 [P] 将 spec/plan/data-model/quickstart 与实际实现对齐，修正文档中已过期的接口或路径描述（specs/001-webui-backend-refactor/spec.md）
-- [ ] T038 在仓库根 README 中添加“WebUI 重构完成后的升级指南”，说明从旧 CLI 工作流迁移到 WebUI 的注意事项，并补充如何通过 WebUI 完成日常操作以减少登录 CLI 的需求，以及问题反馈/工单渠道说明，为 SC-003/SC-004 指标的后续统计留出空间（README.md）
+- [x] T034 [P] 梳理 WebUI 和核心模块中的关键日志点，确保重要操作（启停系统、保存配置、WebDAV 修复等）都有结构化日志（src/alist_mikananirss/webui/services/system_service.py）
+- [x] T035 [P] 根据 SC-002 要求，对系统状态与日志接口进行简单性能分析和优化（如分页/limit 默认值），通过编写简易基准/压测脚本多次调用 `/api/system/status` 与日志接口并统计 95% 请求延迟，基于结果调整实现以避免一次请求加载过多数据（src/alist_mikananirss/webui/api/logs.py）
+- [x] T036 审查并补充 WebUI 相关测试用例，覆盖主要错误路径与边界条件，例如：后端主进程未启动时 WebUI 行为、`config.yaml` 缺失或损坏时的引导配置模式、长时间运行的 WebDAV Job 执行中/失败/刷新页面后的状态恢复等（tests/webui/test_services.py）
+- [x] T037 [P] 将 spec/plan/data-model/quickstart 与实际实现对齐，修正文档中已过期的接口或路径描述（specs/001-webui-backend-refactor/spec.md）
+- [x] T038 在仓库根 README 中添加“WebUI 重构完成后的升级指南”，说明从旧 CLI 工作流迁移到 WebUI 的注意事项，并补充如何通过 WebUI 完成日常操作以减少登录 CLI 的需求，以及问题反馈/工单渠道说明，为 SC-003/SC-004 指标的后续统计留出空间（README.md）
 
 ---
 

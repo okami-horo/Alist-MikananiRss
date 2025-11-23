@@ -134,6 +134,7 @@
     .control-actions {
         display: grid;
         gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
 
     .control-actions .btn {
@@ -177,6 +178,43 @@
         text-align: center;
         padding: 2rem 1rem;
         color: var(--webui-secondary);
+    }
+
+    @media (min-width: 992px) {
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 2fr 1.1fr;
+            gap: 1.25rem;
+        }
+
+        .dashboard-hero {
+            grid-column: 1 / -1;
+        }
+
+        .status-grid {
+            grid-column: 1 / -1;
+        }
+
+        .control-card {
+            grid-column: 1 / 2;
+        }
+
+        .recent-card {
+            grid-column: 2 / 3;
+            align-self: stretch;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .hero-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .hero-actions {
+            width: 100%;
+            justify-content: space-between;
+        }
     }
 
     @media (max-width: 576px) {
@@ -255,7 +293,7 @@
             </div>
         </div>
 
-        <div class="card dashboard-section">
+        <div class="card dashboard-section control-card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
                     <i class="bi bi-sliders me-2"></i>
@@ -276,7 +314,7 @@
             </div>
         </div>
 
-        <div class="card dashboard-section">
+        <div class="card dashboard-section recent-card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
                     <i class="bi bi-clock-history me-2"></i>
@@ -329,7 +367,7 @@
     }
 
     async function loadSystemStatus() {
-        const status = await apiCall('/api/system/status');
+        const status = await apiCall('/api/public/system/status');
 
         const dot = document.getElementById('systemStatusDot');
         const text = document.getElementById('systemStatusText');
@@ -398,7 +436,7 @@
 
     async function loadRecentActivities() {
         try {
-            const activities = await apiCall('/api/logs/recent?limit=6');
+            const activities = await apiCall('/api/public/logs/recent?limit=6');
             const list = document.getElementById('recentActivities');
 
             if (!activities.length) {
@@ -459,7 +497,7 @@
         confirmAction('确定要启动主程序吗？', async () => {
             try {
                 showNotification('正在启动主程序...', 'info');
-                await apiCall('/api/system/start', { method: 'POST' });
+                await apiCall('/api/admin/system/start', { method: 'POST' });
                 showNotification('主程序启动成功', 'success');
                 await loadDashboard();
             } catch (error) {
@@ -472,7 +510,7 @@
         confirmAction('确定要停止主程序吗？', async () => {
             try {
                 showNotification('正在停止主程序...', 'info');
-                await apiCall('/api/system/stop', { method: 'POST' });
+                await apiCall('/api/admin/system/stop', { method: 'POST' });
                 showNotification('主程序停止成功', 'success');
                 await loadDashboard();
             } catch (error) {
@@ -485,7 +523,7 @@
         confirmAction('确定要重启主程序吗？', async () => {
             try {
                 showNotification('正在重启主程序...', 'info');
-                await apiCall('/api/system/restart', { method: 'POST' });
+                await apiCall('/api/admin/system/restart', { method: 'POST' });
                 showNotification('主程序重启成功', 'success');
                 await loadDashboard();
             } catch (error) {

@@ -45,7 +45,7 @@ async function loadLogFiles() {
     select.innerHTML = '<option value="">加载中...</option>';
 
     try {
-        const files = await apiCall("/api/logs/files");
+        const files = await apiCall("/api/public/logs/files");
         if (!Array.isArray(files) || files.length === 0) {
             select.innerHTML = '<option value="">暂无日志文件</option>';
             renderEmptyState("logContainer", "暂无可用日志文件");
@@ -99,7 +99,7 @@ async function loadLogPage(resetPage = false) {
     }
 
     try {
-        const data = await apiCall(`/api/logs/content?${params.toString()}`);
+        const data = await apiCall(`/api/public/logs/content?${params.toString()}`);
         currentEntries = data.entries || [];
         totalEntries = data.total || 0;
 
@@ -250,7 +250,7 @@ async function downloadLogs() {
     }
 
     try {
-        window.open(`/api/logs/download?file=${encodeURIComponent(currentLogFile)}`, "_blank");
+        window.open(`/api/public/logs/download?file=${encodeURIComponent(currentLogFile)}`, "_blank");
         showNotification("日志下载已开始", "success");
     } catch (error) {
         showNotification(`下载失败: ${error.message}`, "danger");
@@ -281,7 +281,7 @@ function startRealtimeMode() {
     stopRealtimeMode();
 
     try {
-        eventSource = new EventSource(`/api/logs/stream?file=${encodeURIComponent(currentLogFile)}`);
+        eventSource = new EventSource(`/api/public/logs/stream?file=${encodeURIComponent(currentLogFile)}`);
         eventSource.onmessage = (event) => {
             const newLog = JSON.parse(event.data);
             currentEntries.push(newLog);

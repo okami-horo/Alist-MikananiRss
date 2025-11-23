@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator, Dict, List, Optional, Tuple, Union
@@ -15,9 +17,10 @@ from ..models import LogEntry, LogFileInfo, LogLevel
 LOG_DIR_ENV = "ALMR_LOG_DIR"
 DEFAULT_LOG_SUBDIR = "log"
 USER_DATA_LOG_DIR = Path.home() / ".alist-mikananirss" / "log"
-DEFAULT_MAX_FILES = 5
-DEFAULT_MAX_ENTRIES = 2000
-DEFAULT_PAGE_LIMIT = 1000
+DEFAULT_MAX_FILES = 4
+DEFAULT_MAX_ENTRIES = 1200
+DEFAULT_PAGE_LIMIT = 500
+logger = logging.getLogger(__name__)
 
 
 def resolve_log_dir(candidate: Optional[Union[str, Path]] = None) -> Path:
@@ -83,12 +86,26 @@ class LogService:
     ) -> Dict[str, object]:
         resolved_limit = min(max(limit, 1), DEFAULT_PAGE_LIMIT)
         resolved_offset = max(offset, 0)
+        started_at = time.perf_counter()
 
         entries = await asyncio.to_thread(self._load_entries, file)
         filtered = self._filter_entries(entries, level=level, search=search)
 
         slice_end = resolved_offset + resolved_limit
         page_entries = filtered[resolved_offset:slice_end]
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        if duration_ms > 300:
+            logger.info(
+                "log_content_served",
+                extra={
+                    "action": "logs_query",
+                    "file": file,
+                    "duration_ms": duration_ms,
+                    "limit": resolved_limit,
+                    "offset": resolved_offset,
+                    "filtered_total": len(filtered),
+                },
+            )
         return {
             "entries": [entry.model_dump() for entry in page_entries],
             "total": len(filtered),
@@ -108,10 +125,24 @@ class LogService:
         limit: int = 100,
     ) -> Dict[str, object]:
         resolved_limit = min(max(limit, 1), DEFAULT_PAGE_LIMIT)
+        started_at = time.perf_counter()
         entries = await asyncio.to_thread(self._collect_all_entries, DEFAULT_MAX_FILES, DEFAULT_MAX_ENTRIES)
         filtered = self._filter_entries(entries, level=level, search=query)
         filtered = sorted(filtered, key=self._entry_timestamp, reverse=True)
         limited = filtered[:resolved_limit]
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        if duration_ms > 300:
+            logger.info(
+                "logs_search_completed",
+                extra={
+                    "action": "logs_search",
+                    "duration_ms": duration_ms,
+                    "query": query,
+                    "level": level,
+                    "matched": len(filtered),
+                    "returned": len(limited),
+                },
+            )
         return {
             "entries": [entry.model_dump() for entry in limited],
             "total": len(filtered),

@@ -25,7 +25,7 @@
 ## 如何使用
 Docker，源码运行等更多的运行方法详见[使用文档](https://github.com/TwooSix/Alist-MikananiRss/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B) 
 
-使用pip安装运行
+使用pip安装运行（兼容模式，推荐 uv）
 1. 请确保你的python版本在3.11以上
 2. 使用pip安装: `pip install alist-mikananirss`
 3. 在目录下新建一个`config.yaml`配置文件，并填写配置文件如下(完整功能示例详解见[配置说明](https://github.com/TwooSix/Alist-MikananiRss/wiki/%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E))
@@ -62,6 +62,21 @@ uv run alist-mikananirss-webui --host 0.0.0.0 --port 8080
 - WebUI 会在浏览器中提供仪表盘、日志、配置与 WebDAV 维护页面，默认访问地址为 `http://<主机IP>:8080/`。
 - 可通过 `--reload`、`--log-level` 等参数调整开发体验。
 - 详细说明与端到端操作示例见 `specs/001-webui-backend-refactor/quickstart.md`。
+
+### 路径分区与访问控制
+
+- 只读接口统一暴露在 `/api/public/*`（系统状态、日志），适合开放给只读访客或多终端查看。
+- 管理接口统一暴露在 `/api/admin/*`（启停/重启、配置读取/保存、WebDAV 手动修复），建议在反向代理层加认证/白名单。
+- 页面路由也建议分区：`/dashboard`、`/logs` 可开放；`/config`、`/webdav/manual` 与 `/api/admin/*` 建议保护。
+- 旧版兼容接口 `/api/system|config|webdav` 仍存在，但推荐仅在代理层放行 `/api/public/*`。
+
+## 从旧版 CLI 升级到 WebUI
+
+1. 备份现有的 `config.yaml` 与自定义脚本（如有），避免直接覆盖新版本配置。
+2. 在仓库根目录执行 `uv sync`，随后使用 `uv run alist-mikananirss-webui --host 0.0.0.0 --port 8080` 启动后端。
+3. 通过浏览器访问 `/config`，按引导重新填写配置；旧配置字段若不兼容，会自动回退到默认值并生成备份。
+4. 在反向代理/NAS 中仅放行 `/api/public/*`、`/dashboard`、`/logs` 等只读路径，对 `/api/admin/*`、`/config`、`/webdav/manual` 启用认证。
+5. CLI 入口仍可用于调试或批处理，但日常运行推荐使用 WebUI 控制与观察。
 
 
 ## 重命名效果展示
