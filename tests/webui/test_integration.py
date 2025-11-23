@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from aioresponses import aioresponses
 import tempfile
 import os
+import time
 from pathlib import Path
 import yaml
 
@@ -19,6 +20,7 @@ from alist_mikananirss.webui.server import app
 from alist_mikananirss.webui.services.system_service import SystemService
 from alist_mikananirss.webui.services.log_service import LogService
 from alist_mikananirss.webui.services.config_service import ConfigService
+from alist_mikananirss.webui.services.webdav_service import WebDAVService
 
 
 def override_config_service(monkeypatch, config_path: Path) -> ConfigService:
@@ -282,6 +284,86 @@ class TestWebUIIntegration:
         mock_services['config'].get_current_config.assert_called()
         mock_services['config'].validate_config.assert_called_with(test_config)
         mock_services['config'].save_config.assert_called_with(test_config)
+
+    def test_multi_terminal_state_sync_and_route_separation(self, client):
+        """多终端查看状态 + 路由分区，便于基于路径做访问控制"""
+        with patch('alist_mikananirss.webui.api.system.system_service') as mock_system, \
+             patch('alist_mikananirss.webui.api.logs.log_service') as mock_logs, \
+             patch('alist_mikananirss.webui.api.config.config_service') as mock_config:
+
+            stopped_status = {
+                "status": "stopped",
+                "uptime": "0:00:00",
+                "cpu_usage": 3.0,
+                "memory_usage": 12.0,
+                "disk_usage": 25.0,
+                "version": "0.5.5",
+            }
+            running_status = {
+                "status": "running",
+                "uptime": "0:15:00",
+                "cpu_usage": 28.0,
+                "memory_usage": 42.0,
+                "disk_usage": 31.0,
+                "version": "0.5.5",
+            }
+            status_sequence = [stopped_status, stopped_status, running_status, running_status]
+
+            def next_status():
+                return status_sequence.pop(0) if status_sequence else running_status
+
+            mock_system.get_system_status.side_effect = next_status
+            mock_system.start_system.return_value = {"success": True, "message": "System started"}
+
+            mock_logs.get_recent_logs.return_value = [
+                {"timestamp": "2025-10-10T10:00:00", "level": "INFO", "message": "Loop idle"},
+                {"timestamp": "2025-10-10T10:01:00", "level": "WARNING", "message": "High memory"},
+            ]
+
+            mock_config.get_current_config.return_value = {
+                "common": {"interval_time": 300, "log_level": "INFO"},
+                "alist": {"base_url": "http://localhost:5244", "downloader": "qBittorrent"},
+            }
+            mock_config.validate_config.return_value = {"valid": True, "errors": []}
+
+            # 只读终端通过 public 前缀访问状态
+            first_terminal = client.get("/api/public/system/status")
+            assert first_terminal.status_code == 200
+            assert first_terminal.json()["status"] == "stopped"
+
+            second_terminal = client.get("/api/public/system/status")
+            assert second_terminal.status_code == 200
+            assert second_terminal.json()["status"] == "stopped"
+
+            # 管理端通过 admin 前缀执行启动
+            start_resp = client.post("/api/admin/system/start")
+            assert start_resp.status_code == 200
+            mock_system.start_system.assert_called_once()
+
+            # 公共状态端点可观察到最新状态
+            refreshed = client.get("/api/public/system/status")
+            mirror = client.get("/api/public/system/status")
+            assert refreshed.json()["status"] == "running"
+            assert mirror.json()["status"] == "running"
+
+            # public/logs 可用于只读观察
+            recent = client.get("/api/public/logs/recent?limit=2")
+            assert recent.status_code == 200
+            assert len(recent.json()) == 2
+            mock_logs.get_recent_logs.assert_called_with(limit=2)
+
+            # 配置读取/校验仅暴露在 admin 前缀
+            public_config = client.get("/api/public/config/current")
+            assert public_config.status_code in (404, 405)
+
+            admin_config = client.get("/api/admin/config/current")
+            assert admin_config.status_code == 200
+            assert admin_config.json()["alist"]["base_url"] == "http://localhost:5244"
+
+            payload = {"common": {"interval_time": 600, "log_level": "INFO"}}
+            validate_resp = client.post("/api/admin/config/validate", json=payload)
+            assert validate_resp.status_code == 200
+            mock_config.validate_config.assert_called_with(payload)
 
     def test_first_time_setup_flow_generates_config(self, tmp_path, monkeypatch):
         """首次访问缺失配置文件时通过 WebUI 完成校验/保存"""
@@ -678,6 +760,166 @@ class TestRealWorldScenarios:
             response = client.get("/api/logs/recent?limit=20")
             recent_logs = response.json()
             assert len(recent_logs) >= 0
+
+
+class TestWebDAVManualFixIntegration:
+    """WebDAV 嵌套修复端到端场景"""
+
+    @pytest.fixture
+    def client(self):
+        """创建测试客户端"""
+        return TestClient(app)
+
+    def _minimal_config(self) -> dict:
+        return {
+            "common": {"interval_time": 300, "log_level": "INFO"},
+            "alist": {
+                "base_url": "http://127.0.0.1:5244",
+                "token": "token",
+                "downloader": "qBittorrent",
+                "download_path": "/downloads",
+                "convert_torrent_to_magnet": False,
+            },
+            "mikan": {"subscribe_url": ["https://example.com/rss"], "filters": [], "regex_pattern": {}},
+            "webdav": {
+                "username": "admin",
+                "password": "1234",
+                "manual": {
+                    "enable": True,
+                    "default_path": "/downloads",
+                    "execute_mode": False,
+                    "recursive_scan": True,
+                    "conflict_strategy": "skip",
+                },
+            },
+        }
+
+    @pytest.fixture
+    def webdav_context(self, monkeypatch):
+        """配置 WebDAV Service 以返回可轮询的 Job"""
+        config = self._minimal_config()
+        fake_config_service = MagicMock()
+        fake_config_service.get_current_config = AsyncMock(return_value=config)
+
+        service = WebDAVService()
+        monkeypatch.setattr(
+            "alist_mikananirss.webui.services.webdav_service.config_service",
+            fake_config_service,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "alist_mikananirss.webui.services.webdav_service._webdav_service",
+            service,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "alist_mikananirss.webui.services.webdav_service.webdav_service",
+            service,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "alist_mikananirss.webui.api.webdav.webdav_service",
+            service,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "alist_mikananirss.webui.api.webdav.get_webdav_service",
+            lambda: service,
+            raising=False,
+        )
+
+        async def fake_execute_manual_fix(
+            *,
+            app_cfg,
+            target_dir,
+            dry_run,
+            effective_execute,
+            effective_recursive,
+            effective_conflict,
+        ):
+            return {
+                "success": True,
+                "message": "ok",
+                "target_dir": target_dir,
+                "dry_run": dry_run,
+                "options": {
+                    "execute_mode": effective_execute,
+                    "recursive_scan": effective_recursive,
+                    "conflict_strategy": effective_conflict,
+                },
+                "result": {
+                    "target": target_dir,
+                    "total_found": 3 if dry_run else 5,
+                    "mode": "preview" if dry_run else "execute",
+                    "recursive": effective_recursive,
+                },
+            }
+
+        monkeypatch.setattr(
+            service,
+            "_execute_manual_fix",
+            AsyncMock(side_effect=fake_execute_manual_fix),
+        )
+
+        return service
+
+    def _wait_for_completion(self, client, job_id: str, attempts: int = 40):
+        """轮询 Job 状态直到完成或失败"""
+        last_status = None
+        for _ in range(attempts):
+            response = client.get(f"/api/admin/webdav/jobs/{job_id}")
+            assert response.status_code == 200
+            last_status = response.json()
+            if last_status["status"] in {"completed", "failed"}:
+                break
+            time.sleep(0.05)
+        return last_status
+
+    def test_manual_fix_preview_and_execute_job_flow(self, client, webdav_context):
+        """预览+执行模式都会生成 Job ID 并可轮询到完成状态"""
+        preview_payload = {
+            "path": "/downloads/preview-only",
+            "execute_mode": False,
+            "recursive_scan": True,
+            "conflict_strategy": "rename",
+        }
+
+        preview_resp = client.post("/api/admin/webdav/manual-fix", json=preview_payload)
+        assert preview_resp.status_code == 202
+        preview_job = preview_resp.json()
+        assert preview_job["status"] == "queued"
+
+        preview_status = self._wait_for_completion(client, preview_job["job_id"])
+        assert preview_status["status"] == "completed"
+        assert preview_status["dry_run"] is True
+        assert preview_status["options"]["execute_mode"] is False
+        assert preview_status["options"]["conflict_strategy"] == "rename"
+        assert preview_status["result"]["mode"] == "preview"
+
+        execute_payload = {
+            "path": "/downloads/execute-now",
+            "execute_mode": True,
+            "recursive_scan": False,
+            "conflict_strategy": "overwrite",
+        }
+
+        execute_resp = client.post("/api/admin/webdav/manual-fix", json=execute_payload)
+        assert execute_resp.status_code == 202
+        execute_job = execute_resp.json()
+        assert execute_job["dry_run"] is False
+
+        execute_status = self._wait_for_completion(client, execute_job["job_id"])
+        assert execute_status["status"] == "completed"
+        assert execute_status["dry_run"] is False
+        assert execute_status["options"]["conflict_strategy"] == "overwrite"
+        assert execute_status["result"]["mode"] == "execute"
+        assert execute_status["result"]["recursive"] is False
+
+        jobs_resp = client.get("/api/admin/webdav/jobs")
+        assert jobs_resp.status_code == 200
+        job_ids = [job["job_id"] for job in jobs_resp.json()]
+        assert execute_job["job_id"] == job_ids[0]
+        assert preview_job["job_id"] in job_ids
 
 
 class TestPerformanceAndScalability:

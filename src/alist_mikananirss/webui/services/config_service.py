@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import logging
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -15,6 +16,8 @@ import yaml
 
 from ...common.config.config import AppConfig
 from ..models import ConfigItem, ConfigValidationError
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigService:
@@ -104,6 +107,16 @@ class ConfigService:
         if webdav_cfg.get("timeout", 0) < 5:
             add_error("webdav.timeout", "timeout must be >= 5 seconds")
 
+        if errors:
+            logger.warning(
+                "Configuration validation failed",
+                extra={
+                    "action": "config_validate",
+                    "error_count": len(errors),
+                    "strict": strict,
+                },
+            )
+
         return {
             "valid": len(errors) == 0,
             "errors": errors,
@@ -115,6 +128,10 @@ class ConfigService:
             await self._ensure_loaded()
             validation = await self.validate_config(config, strict=True)
             if not validation["valid"]:
+                logger.warning(
+                    "Configuration save aborted due to validation errors",
+                    extra={"action": "config_save", "error_count": len(validation["errors"])},
+                )
                 return {
                     "success": False,
                     "errors": validation["errors"],
@@ -133,6 +150,14 @@ class ConfigService:
             self._cache = normalized.model_dump(mode="json")
             await self._write_yaml(self.config_file, self._cache)
             self._meta = {"needs_setup": False, "source": "file"}
+        logger.info(
+            "Configuration saved",
+            extra={
+                "action": "config_save",
+                "path": str(self.config_file),
+                "backup_created": backup_created,
+            },
+        )
         return {"success": True, "backup_created": backup_created}
 
     async def get_config_schema(self) -> Dict[str, Any]:
@@ -243,6 +268,15 @@ class ConfigService:
                 results["mikan"] = {"status": "error", "message": "Invalid subscribe_url"}
 
         success = bool(results) and all(r.get("status") == "ok" for r in results.values())
+        logger.info(
+            "Configuration connectivity test finished",
+            extra={
+                "action": "config_test",
+                "alist_status": results.get("alist", {}).get("status"),
+                "mikan_status": results.get("mikan", {}).get("status"),
+                "success": success,
+            },
+        )
         return {"success": success, "results": results}
 
     def _validate_url(self, url: str) -> bool:
@@ -267,6 +301,10 @@ class ConfigService:
             self._cache = self._default_config()
             await self._write_yaml(self.config_file, self._cache)
             self._meta = {"needs_setup": True, "source": "default"}
+            logger.warning(
+                "Config file missing; generated default configuration",
+                extra={"action": "config_recover", "path": str(self.config_file)},
+            )
             return self._meta.copy()
 
         try:
@@ -293,6 +331,15 @@ class ConfigService:
             if backup_path:
                 self._meta["backup_path"] = str(backup_path)
             await self._write_yaml(self.config_file, self._cache)
+            logger.warning(
+                "Config file invalid; recovered defaults and created backup",
+                extra={
+                    "action": "config_recover",
+                    "path": str(self.config_file),
+                    "backup_path": str(backup_path) if backup_path else None,
+                    "error": message,
+                },
+            )
 
         return self._meta.copy()
 

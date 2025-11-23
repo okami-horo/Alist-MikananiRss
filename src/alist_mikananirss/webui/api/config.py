@@ -11,7 +11,8 @@ from fastapi import APIRouter, Body, HTTPException
 
 from ..services.config_service import config_service, get_config_service
 
-router = APIRouter()
+admin_router = APIRouter()
+legacy_router = APIRouter()
 
 
 async def _resolve(value: Any) -> Any:
@@ -38,7 +39,7 @@ def _as_dict(value: Any) -> Dict[str, Any]:
     return {"result": value}
 
 
-@router.get("/current")
+@admin_router.get("/current")
 async def get_current_config() -> Dict[str, Any]:
     try:
         result = await _resolve(config_service.get_current_config())
@@ -47,7 +48,7 @@ async def get_current_config() -> Dict[str, Any]:
         raise HTTPException(500, f"Unable to load configuration: {exc}") from exc
 
 
-@router.post("/validate")
+@admin_router.post("/validate")
 async def validate_config(config: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     payload = _as_dict(await _resolve(config_service.validate_config(config)))
     if "valid" not in payload:
@@ -57,7 +58,7 @@ async def validate_config(config: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     return payload
 
 
-@router.post("/save")
+@admin_router.post("/save")
 async def save_config(config: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     result = _as_dict(await _resolve(config_service.save_config(config)))
     if "success" not in result:
@@ -67,12 +68,12 @@ async def save_config(config: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     raise HTTPException(400, result)
 
 
-@router.get("/schema")
+@admin_router.get("/schema")
 async def get_schema() -> Dict[str, Any]:
     return _as_dict(await _resolve(config_service.get_config_schema()))
 
 
-@router.post("/test")
+@admin_router.post("/test")
 async def test_config(config: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     payload = _as_dict(await _resolve(config_service.test_config(config)))
     payload["success"] = bool(payload.get("success", True))
@@ -80,4 +81,7 @@ async def test_config(config: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     return payload
 
 
-__all__ = ["router", "config_service", "get_config_service"]
+legacy_router.include_router(admin_router)
+router = legacy_router
+
+__all__ = ["admin_router", "router", "config_service", "get_config_service"]

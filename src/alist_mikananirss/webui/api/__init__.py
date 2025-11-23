@@ -15,17 +15,34 @@ from typing import Iterable, Tuple
 
 from fastapi import FastAPI, APIRouter
 
-from .system import router as system_router
-from .logs import router as logs_router
-from .config import router as config_router
-from .webdav import router as webdav_router
+from .system import (
+    public_router as system_public_router,
+    control_router as system_control_router,
+    router as system_router,
+)
+from .logs import public_router as logs_public_router, router as logs_router
+from .config import admin_router as config_admin_router, router as config_router
+from .webdav import admin_router as webdav_admin_router, router as webdav_router
 
-API_ROUTERS: Tuple[Tuple[APIRouter, str, list[str]], ...] = (
+PUBLIC_API_ROUTERS: Tuple[Tuple[APIRouter, str, list[str]], ...] = (
+    (system_public_router, "/api/public/system", ["System", "public"]),
+    (logs_public_router, "/api/public/logs", ["Logs", "public"]),
+)
+
+ADMIN_API_ROUTERS: Tuple[Tuple[APIRouter, str, list[str]], ...] = (
+    (system_control_router, "/api/admin/system", ["System", "admin"]),
+    (config_admin_router, "/api/admin/config", ["Configuration", "admin"]),
+    (webdav_admin_router, "/api/admin/webdav", ["WebDAV", "admin"]),
+)
+
+LEGACY_API_ROUTERS: Tuple[Tuple[APIRouter, str, list[str]], ...] = (
     (system_router, "/api/system", ["System"]),
     (logs_router, "/api/logs", ["Logs"]),
     (config_router, "/api/config", ["Configuration"]),
     (webdav_router, "/api/webdav", ["WebDAV"]),
 )
+
+API_ROUTERS: Tuple[Tuple[APIRouter, str, list[str]], ...] = PUBLIC_API_ROUTERS + ADMIN_API_ROUTERS + LEGACY_API_ROUTERS
 
 
 def register_api_routes(app: FastAPI, routers: Iterable[Tuple[APIRouter, str, Iterable[str]]] | None = None) -> None:
@@ -37,10 +54,18 @@ def register_api_routes(app: FastAPI, routers: Iterable[Tuple[APIRouter, str, It
 
 
 __all__ = [
+    "system_public_router",
+    "system_control_router",
     "system_router",
+    "logs_public_router",
     "logs_router",
+    "config_admin_router",
     "config_router",
+    "webdav_admin_router",
     "webdav_router",
+    "PUBLIC_API_ROUTERS",
+    "ADMIN_API_ROUTERS",
+    "LEGACY_API_ROUTERS",
     "API_ROUTERS",
     "register_api_routes",
 ]

@@ -115,3 +115,28 @@ WebUI 相关测试覆盖：
 - 使用 Docker / systemd 将 `alist-mikananirss-webui` 进程以服务方式长期运行；
 - 通过反向代理（如 Nginx、Caddy）实现访问控制与 HTTPS；
 - 对“配置修改 / 运维操作”页面提供额外的访问保护，只读查看可以更开放一些。
+
+## 9. 访问控制与路径分区
+
+US4 引入了明确的路由分区，便于在反向代理层做“只读”和“敏感操作”的隔离：
+
+- **只读前缀**：`/api/public/*`（系统状态、日志浏览等），适合开放给只读访客或移动端。
+- **管理前缀**：`/api/admin/*`（启停/重启、配置读取/保存、WebDAV 手动修复等），应在反向代理层加上认证或白名单。
+- **页面路由**：只读页面通常是 `/dashboard`、`/logs`；敏感页面 `/config`、`/webdav/manual` 建议和 `/api/admin/*` 一同受控。
+- **兼容路由**：旧的 `/api/system`、`/api/config`、`/api/webdav` 仍保留，但推荐在代理层只放行 `/api/public/*`，其余路径加上保护。
+
+Nginx 示例（仅供参考）：
+
+```nginx
+# 只读访问
+location ~ ^/(dashboard|logs|static|api/public/) {
+    proxy_pass http://127.0.0.1:8080;
+}
+
+# 敏感操作需要认证
+location ~ ^/(config|webdav|api/admin/) {
+    auth_basic "Protected";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+    proxy_pass http://127.0.0.1:8080;
+}
+```

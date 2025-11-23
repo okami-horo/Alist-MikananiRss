@@ -119,8 +119,8 @@ async function loadConfig(showToast = true) {
     try {
         resetTestPanel();
         const [config, schema] = await Promise.all([
-            apiCall('/api/config/current'),
-            apiCall('/api/config/schema')
+            apiCall('/api/admin/config/current'),
+            apiCall('/api/admin/config/schema')
         ]);
         currentConfig = config || {};
         configSchema = schema || {};
@@ -676,7 +676,7 @@ function collectWebdavFormData() {
 async function saveConfig() {
     const payload = collectFormData();
     try {
-        const response = await apiCall('/api/config/save', {
+        const response = await apiCall('/api/admin/config/save', {
             method: 'POST',
             body: JSON.stringify(payload)
         });
@@ -701,7 +701,7 @@ async function testConfig() {
     const payload = collectFormData();
     setTestStatus('running');
     try {
-        const result = await apiCall('/api/config/test', {
+        const result = await apiCall('/api/admin/config/test', {
             method: 'POST',
             body: JSON.stringify(payload)
         });
@@ -793,7 +793,7 @@ async function doImportConfig() {
         const text = await file.text();
         const parsed = await parseConfigText(text);
 
-        const validation = await apiCall('/api/config/validate', {
+        const validation = await apiCall('/api/admin/config/validate', {
             method: 'POST',
             body: JSON.stringify(parsed)
         });

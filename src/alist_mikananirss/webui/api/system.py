@@ -12,7 +12,9 @@ from fastapi import APIRouter, HTTPException, Response
 
 from ..services.system_service import get_system_service, system_service
 
-router = APIRouter()
+public_router = APIRouter()
+control_router = APIRouter()
+legacy_router = APIRouter()
 
 async def _resolve(value: Any) -> Any:
     if inspect.isawaitable(value):
@@ -38,7 +40,7 @@ def _as_dict(value: Any) -> dict:
     return {"result": value}
 
 
-@router.get("/status")
+@public_router.get("/status")
 async def get_system_status() -> dict:
     try:
         status = await _resolve(system_service.get_system_status())
@@ -47,7 +49,7 @@ async def get_system_status() -> dict:
         raise HTTPException(500, f"Unable to retrieve system status: {exc}") from exc
 
 
-@router.post("/start")
+@control_router.post("/start")
 async def start_system() -> dict:
     result = _as_dict(await _resolve(system_service.start_system()))
     if result.get("success"):
@@ -55,7 +57,7 @@ async def start_system() -> dict:
     raise HTTPException(400, result.get("message", "Unable to start system"))
 
 
-@router.post("/stop")
+@control_router.post("/stop")
 async def stop_system() -> dict:
     result = _as_dict(await _resolve(system_service.stop_system()))
     if result.get("success"):
@@ -63,7 +65,7 @@ async def stop_system() -> dict:
     raise HTTPException(400, result.get("message", "Unable to stop system"))
 
 
-@router.post("/restart")
+@control_router.post("/restart")
 async def restart_system() -> dict:
     result = _as_dict(await _resolve(system_service.restart_system()))
     if result.get("success"):
@@ -71,13 +73,13 @@ async def restart_system() -> dict:
     raise HTTPException(400, result.get("message", "Unable to restart system"))
 
 
-@router.get("/health")
+@public_router.get("/health")
 async def health_check() -> dict:
     healthy = await _resolve(system_service.health_check())
     return {"healthy": healthy, "timestamp": datetime.utcnow().isoformat()}
 
 
-@router.options("/status", include_in_schema=False)
+@public_router.options("/status", include_in_schema=False)
 async def options_status() -> Response:
     response = Response(status_code=200)
     response.headers["access-control-allow-origin"] = "*"
@@ -86,5 +88,15 @@ async def options_status() -> Response:
     return response
 
 
+legacy_router.include_router(public_router)
+legacy_router.include_router(control_router)
+router = legacy_router
+
 # Provide the getter in __all__ for tests/consumers needing a fresh instance.
-__all__ = ["router", "get_system_service", "system_service"]
+__all__ = [
+    "public_router",
+    "control_router",
+    "router",
+    "get_system_service",
+    "system_service",
+]

@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, status
 from ..services.webdav_service import get_webdav_service, webdav_service
 from ..models import WebdavManualFixJob, WebdavJobStatus
 
-router = APIRouter()
+admin_router = APIRouter()
 
 
 class ManualFixRequest(BaseModel):
@@ -50,7 +50,7 @@ def _job_to_response(job: WebdavManualFixJob) -> ManualFixResponse:
     )
 
 
-@router.post("/manual-fix", response_model=ManualFixResponse, status_code=status.HTTP_202_ACCEPTED)
+@admin_router.post("/manual-fix", response_model=ManualFixResponse, status_code=status.HTTP_202_ACCEPTED)
 async def manual_fix(payload: ManualFixRequest) -> ManualFixResponse:
     service = webdav_service
     if service is None:
@@ -69,7 +69,7 @@ async def manual_fix(payload: ManualFixRequest) -> ManualFixResponse:
     return _job_to_response(job)
 
 
-@router.get("/jobs/{job_id}", response_model=ManualFixResponse)
+@admin_router.get("/jobs/{job_id}", response_model=ManualFixResponse)
 async def manual_fix_status(job_id: str) -> ManualFixResponse:
     service = webdav_service
     if service is None:
@@ -81,7 +81,7 @@ async def manual_fix_status(job_id: str) -> ManualFixResponse:
     return _job_to_response(job)
 
 
-@router.get("/jobs", response_model=list[ManualFixResponse])
+@admin_router.get("/jobs", response_model=list[ManualFixResponse])
 async def manual_fix_jobs() -> list[ManualFixResponse]:
     service = webdav_service
     if service is None:
@@ -89,3 +89,5 @@ async def manual_fix_jobs() -> list[ManualFixResponse]:
 
     jobs = await service.list_jobs()
     return [_job_to_response(job) for job in jobs]
+
+router = admin_router

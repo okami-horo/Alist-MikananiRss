@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse
 from ..models import LogLevel
 from ..services.log_service import get_log_service, log_service
 
-router = APIRouter()
+public_router = APIRouter()
 
 
 def _is_model(obj: Any) -> bool:
@@ -58,7 +58,7 @@ def _normalise_entries_payload(data: Any) -> dict:
     return payload
 
 
-@router.get("/files")
+@public_router.get("/files")
 async def list_log_files() -> list[dict]:
     try:
         files = await _resolve(log_service.get_log_files())
@@ -78,10 +78,10 @@ def _parse_level(level: Optional[str]) -> Optional[str]:
         raise HTTPException(400, "Unknown log level") from exc
 
 
-@router.get("/content")
+@public_router.get("/content")
 async def read_log_content(
     file: str = Query(..., description="log file name"),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     level: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
@@ -111,7 +111,7 @@ async def read_log_content(
     return result
 
 
-@router.get("/recent")
+@public_router.get("/recent")
 async def recent_logs(limit: int = Query(10, ge=1, le=200)) -> list[dict]:
     try:
         logs = await _resolve(log_service.get_recent_logs(limit=limit))
@@ -120,11 +120,11 @@ async def recent_logs(limit: int = Query(10, ge=1, le=200)) -> list[dict]:
         raise HTTPException(500, f"Unable to load recent logs: {exc}") from exc
 
 
-@router.get("/search")
+@public_router.get("/search")
 async def search_logs(
     q: str = Query(..., description="search keyword"),
     level: Optional[str] = Query(None),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(50, ge=1, le=500),
 ) -> dict:
     parsed_level = _parse_level(level)
     try:
@@ -160,7 +160,7 @@ async def search_logs(
     return payload
 
 
-@router.get("/stream")
+@public_router.get("/stream")
 async def stream_logs(
     file: str = Query(..., description="log file name to follow"),
     poll_interval: float = Query(1.0, ge=0.1, le=5.0),
@@ -188,4 +188,6 @@ async def stream_logs(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-__all__ = ["router", "log_service", "get_log_service"]
+router = public_router
+
+__all__ = ["public_router", "router", "log_service", "get_log_service"]

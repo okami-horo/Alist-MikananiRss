@@ -2,11 +2,61 @@
 
 {% block title %}日志查看 - Alist-MikananiRss WebUI{% endblock %}
 
+{% block extra_css %}
+<style>
+    .logs-page .log-container {
+        max-height: 70vh;
+        border-radius: 1rem;
+    }
+
+    .logs-page .logs-header {
+        gap: 1rem;
+    }
+
+    .logs-page .logs-actions {
+        gap: 0.75rem;
+    }
+
+    .logs-page .log-stats .card {
+        border-radius: 1rem;
+    }
+
+    @media (max-width: 992px) {
+        .logs-page .log-container {
+            max-height: 60vh;
+            font-size: 0.9rem;
+        }
+        .logs-page .logs-header {
+            align-items: flex-start;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .logs-page .log-stats .card-body {
+            padding: 0.85rem;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .logs-page .page-header h1 {
+            font-size: 1.5rem;
+        }
+        .logs-page .logs-actions {
+            flex-direction: column;
+        }
+        .logs-page .logs-actions .btn-toolbar {
+            width: 100%;
+            justify-content: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="fade-in">
+<div class="fade-in logs-page">
     <!-- 页面标题 -->
     <div class="page-header border-bottom pt-3 pb-2 mb-3">
-        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
+        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 logs-header">
             <div>
                 <h1 class="h2 mb-0">
                     <i class="bi bi-file-text me-2"></i>
@@ -14,7 +64,7 @@
                 </h1>
                 <p class="text-muted small mb-0 d-md-none">快速检索与下载关键日志信息</p>
             </div>
-            <div class="d-flex gap-2 flex-md-row flex-column w-100 w-md-auto">
+            <div class="d-flex flex-md-row flex-column w-100 w-md-auto logs-actions">
                 <button class="btn btn-outline-secondary btn-sm d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#logFilterContent" aria-expanded="false">
                     <i class="bi bi-funnel me-2"></i>筛选
                 </button>
@@ -51,7 +101,7 @@
     <!-- 日志控制面板 -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card">
+            <div class="card log-filter-card">
                 <div class="card-body">
                     <div class="row g-3 collapse show" id="logFilterContent">
                         <!-- 日志文件选择 -->
@@ -114,7 +164,7 @@
     </div>
 
     <!-- 日志统计信息 -->
-    <div class="row mb-4 g-2">
+    <div class="row mb-4 g-2 log-stats">
         <div class="col-6 col-sm-4 col-lg-2">
             <div class="card">
                 <div class="card-body text-center">
