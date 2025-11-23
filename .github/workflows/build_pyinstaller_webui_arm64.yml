@@ -1,0 +1,59 @@
+name: Build WebUI Binary (PyInstaller, linux/arm64)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - v*
+
+jobs:
+  build-arm64:
+    runs-on: ubuntu-22.04-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: latest
+
+      - name: Sync dependencies (no dev)
+        run: |
+          uv sync --no-dev
+
+      - name: Build onefile binary with PyInstaller
+        run: |
+          uv run --with pyinstaller pyinstaller \
+            --noconfirm \
+            --clean \
+            --name alist-mikananirss-webui \
+            --onefile \
+            --collect-all jinja2 \
+            --exclude-module pkg_resources \
+            --exclude-module setuptools \
+            --add-data 'src/alist_mikananirss/webui/templates:alist_mikananirss/webui/templates' \
+            --add-data 'src/alist_mikananirss/webui/static:alist_mikananirss/webui/static' \
+            src/alist_mikananirss/webui/__main__.py
+
+      - name: Show binary info
+        run: |
+          file dist/alist-mikananirss-webui || true
+          ls -lh dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alist-mikananirss-webui-linux-arm64
+          path: dist/alist-mikananirss-webui
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/alist-mikananirss-webui
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
