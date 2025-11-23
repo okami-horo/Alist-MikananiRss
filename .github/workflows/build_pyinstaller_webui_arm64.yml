@@ -8,7 +8,11 @@ on:
 
 jobs:
   build-arm64:
+<<<<<<< HEAD
     runs-on: ubuntu-24.04-arm64
+=======
+    runs-on: ubuntu-24.04-arm
+>>>>>>> cb04861 (ci: 更新ARM64构建工作流运行环境至ubuntu-24.04-arm)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
