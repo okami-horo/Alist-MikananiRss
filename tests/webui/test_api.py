@@ -7,6 +7,7 @@ WebUI API单元测试
 import json
 import os
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,7 +17,13 @@ from aioresponses import aioresponses
 import yaml
 
 from alist_mikananirss.webui.server import app
-from alist_mikananirss.webui.models import SystemStatus, LogEntry, ConfigItem
+from alist_mikananirss.webui.models import (
+    SystemStatus,
+    LogEntry,
+    ConfigItem,
+    WebdavManualFixJob,
+    WebdavJobStatus,
+)
 from alist_mikananirss.webui.services.config_service import ConfigService
 
 
@@ -205,6 +212,26 @@ class TestLogsAPI:
 
     @pytest.mark.asyncio
     @patch('alist_mikananirss.webui.api.logs.log_service')
+    async def test_get_log_content_missing_file(self, mock_service):
+        """缺少日志文件时返回404"""
+        mock_service.get_log_content.side_effect = FileNotFoundError("Log file 'app.log' not found")
+
+        response = self.client.get("/api/logs/content?file=app.log")
+
+        assert response.status_code == 404
+        assert "app.log" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.logs.log_service')
+    async def test_get_log_content_invalid_level(self, mock_service):
+        """非法日志级别返回400"""
+        response = self.client.get("/api/logs/content?file=app.log&level=invalid")
+
+        assert response.status_code == 400
+        mock_service.get_log_content.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.logs.log_service')
     async def test_get_recent_logs(self, mock_service):
         """测试获取最近日志"""
         mock_service.get_recent_logs.return_value = [
@@ -250,6 +277,15 @@ class TestLogsAPI:
         data = response.json()
         assert data["total"] == 1
         assert "download" in data["entries"][0]["message"].lower()
+
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.logs.log_service')
+    async def test_search_logs_invalid_level(self, mock_service):
+        """搜索日志时非法级别返回400"""
+        response = self.client.get("/api/logs/search?q=download&level=verbose")
+
+        assert response.status_code == 400
+        mock_service.search_logs.assert_not_called()
 
     @pytest.mark.asyncio
     @patch('alist_mikananirss.webui.api.logs.log_service')
@@ -578,6 +614,67 @@ class TestConfigAPIUS2:
         assert data["success"] is False
         assert "validation" in data["results"]
         assert any("alist.base_url" in err["field"] for err in data["results"]["validation"])
+
+
+class TestWebDAVAPI:
+    """WebDAV API 测试"""
+
+    def setup_method(self):
+        self.client = TestClient(app)
+
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.webdav.webdav_service')
+    async def test_manual_fix_returns_job_id(self, mock_service):
+        job = WebdavManualFixJob(
+            id="job123",
+            status=WebdavJobStatus.QUEUED,
+            created_at=datetime.now(timezone.utc),
+            target_dir="/data",
+            dry_run=True,
+            options={"execute_mode": False},
+        )
+        mock_service.submit_manual_fix = AsyncMock(return_value=job)
+
+        response = self.client.post("/api/webdav/manual-fix", json={"path": "/data"})
+
+        assert response.status_code == 202
+        data = response.json()
+        assert data["job_id"] == "job123"
+        assert data["status"] == "queued"
+        mock_service.submit_manual_fix.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.webdav.webdav_service')
+    async def test_manual_fix_status_endpoint(self, mock_service):
+        job = WebdavManualFixJob(
+            id="job789",
+            status=WebdavJobStatus.COMPLETED,
+            created_at=datetime.now(timezone.utc),
+            started_at=datetime.now(timezone.utc),
+            finished_at=datetime.now(timezone.utc),
+            target_dir="/data",
+            dry_run=False,
+            result={"total_found": 3},
+            options={"execute_mode": True},
+        )
+        mock_service.get_job = AsyncMock(return_value=job)
+
+        response = self.client.get("/api/webdav/jobs/job789")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["job_id"] == "job789"
+        assert payload["status"] == "completed"
+        assert payload["result"]["total_found"] == 3
+
+    @pytest.mark.asyncio
+    @patch('alist_mikananirss.webui.api.webdav.webdav_service')
+    async def test_manual_fix_status_not_found(self, mock_service):
+        mock_service.get_job = AsyncMock(return_value=None)
+
+        response = self.client.get("/api/webdav/jobs/unknown")
+
+        assert response.status_code == 404
 
 
 class TestWebUIPages:

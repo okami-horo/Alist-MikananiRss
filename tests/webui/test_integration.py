@@ -361,7 +361,7 @@ class TestWebUIIntegration:
 
             # 2. 日志API错误
             response = client.get("/api/logs/files")
-            assert response.status_code == 500
+            assert response.status_code == 404
 
         with patch('alist_mikananirss.webui.api.config.config_service') as mock_config:
             # 模拟配置文件错误
