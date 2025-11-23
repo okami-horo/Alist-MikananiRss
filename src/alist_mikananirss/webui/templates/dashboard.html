@@ -313,23 +313,6 @@
                 <div class="metric-note">可在此启动、停止或重启订阅服务。</div>
             </div>
         </div>
-
-        <div class="card dashboard-section recent-card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-clock-history me-2"></i>
-                    最近活动
-                </h5>
-            </div>
-            <div class="card-body">
-                <div id="recentActivities" class="recent-activity-list">
-                    <div class="empty-placeholder">
-                        <div class="loading-spinner"></div>
-                        <div class="mt-2">正在获取最新日志...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 {% endblock %}
@@ -354,10 +337,7 @@
 
     async function loadDashboard() {
         try {
-            const [status, activities] = await Promise.all([
-                loadSystemStatus(),
-                loadRecentActivities()
-            ]);
+            const status = await loadSystemStatus();
             await renderSystemControls(status.service_status || status.status);
             document.getElementById('heroUpdated').textContent = `最后更新：${formatTime(new Date())}`;
         } catch (error) {
@@ -434,65 +414,6 @@
                 </button>
             `;
         }
-    }
-
-    async function loadRecentActivities() {
-        try {
-            const activities = await apiCall('/api/public/logs/recent?limit=6');
-            const list = document.getElementById('recentActivities');
-
-            if (!activities.length) {
-                list.innerHTML = `
-                    <div class="empty-placeholder">
-                        <i class="bi bi-inbox"></i>
-                        <div class="mt-2">暂无近期日志</div>
-                    </div>
-                `;
-                return activities;
-            }
-
-            list.innerHTML = activities.map(item => `
-                <div class="recent-activity-item">
-                    <i class="bi bi-${getActivityIcon(item.level)} recent-activity-icon text-${getActivityColor(item.level)}"></i>
-                    <div class="recent-activity-meta">
-                        <span class="recent-activity-message">${item.message}</span>
-                        <span class="recent-activity-time">${formatTime(item.timestamp)}</span>
-                    </div>
-                </div>
-            `).join('');
-
-            return activities;
-        } catch (error) {
-            document.getElementById('recentActivities').innerHTML = `
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    无法加载最近活动
-                </div>
-            `;
-            throw error;
-        }
-    }
-
-    function getActivityIcon(level) {
-        const icons = {
-            DEBUG: 'bug',
-            INFO: 'info-circle',
-            WARNING: 'exclamation-triangle',
-            ERROR: 'x-circle',
-            CRITICAL: 'fire'
-        };
-        return icons[level] || 'circle';
-    }
-
-    function getActivityColor(level) {
-        const colors = {
-            DEBUG: 'secondary',
-            INFO: 'info',
-            WARNING: 'warning',
-            ERROR: 'danger',
-            CRITICAL: 'danger'
-        };
-        return colors[level] || 'secondary';
     }
 
     async function controlService(action) {
