@@ -7,8 +7,10 @@ import copy
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 import aiohttp
+from pydantic import ValidationError
 import yaml
 
 from ...common.config.config import AppConfig
@@ -28,46 +30,78 @@ class ConfigService:
         async with self._lock:
             meta = await self._ensure_loaded()
             normalized = self._normalize_to_app_config(self._cache)
-            result = normalized.model_dump()
+            result = normalized.model_dump(mode="json")
         result["_meta"] = meta
         return result
 
-    async def validate_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        errors = []
+    async def validate_config(self, config: Dict[str, Any], strict: bool = False) -> Dict[str, Any]:
+        errors: list[Dict[str, str]] = []
         field_errors: Dict[str, list[str]] = {}
 
         def add_error(field: str, message: str) -> None:
+            if any(err for err in errors if err["field"] == field and err["message"] == message):
+                return
             errors.append({"field": field, "message": message})
             field_errors.setdefault(field, []).append(message)
 
+        incoming = config or {}
+        incoming_common = incoming.get("common", {}) or {}
+        incoming_alist = incoming.get("alist", {}) or {}
+        incoming_mikan = incoming.get("mikan", {}) or {}
+
+        if not incoming_alist.get("token"):
+            add_error("alist.token", "token is required")
+        if strict or "download_path" in incoming_alist:
+            if not incoming_alist.get("download_path"):
+                add_error("alist.download_path", "download_path is required")
+
+        subscribe_urls_raw = incoming_mikan.get("subscribe_url", None)
+        subscribe_urls_provided = list(subscribe_urls_raw or [])
+        require_subscribe = False
+        if strict:
+            require_subscribe = self._meta.get("needs_setup", False) or subscribe_urls_raw is not None
+        else:
+            require_subscribe = subscribe_urls_raw is not None
+        if require_subscribe and len(subscribe_urls_provided) == 0:
+            add_error("mikan.subscribe_url", "At least one subscribe_url is required")
+
+        merged = self._merge_config(self._default_config(), config or {})
+
+        normalized: AppConfig | None = None
         try:
-            normalized = self._normalize_to_app_config(config)
+            normalized = self._normalize_to_app_config(merged)
+        except ValidationError as exc:
+            for err in exc.errors():
+                loc = ".".join(str(part) for part in err.get("loc", []) if part != "__root__")
+                add_error(loc or "config", err.get("msg", str(exc)))
         except Exception as exc:
             add_error("config", str(exc))
-            return {"valid": False, "errors": errors, "field_errors": field_errors}
 
-        common = normalized.common
-        if common.interval_time < 60:
-            add_error("common.interval_time", "interval_time must be >= 60")
+        normalized_dict = normalized.model_dump(mode="json") if normalized else merged
 
-        log_level = getattr(common, "log_level", "INFO")
-        if log_level.upper() not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+        common = normalized_dict.get("common", {}) or {}
+        if not self._validate_interval_time(common.get("interval_time")):
+            add_error("common.interval_time", "interval_time must be >= 60 seconds")
+
+        log_level = common.get("log_level", "INFO")
+        if not self._validate_log_level(log_level):
             add_error("common.log_level", "log_level must be one of DEBUG/INFO/WARNING/ERROR/CRITICAL")
 
-        alist = normalized.alist
-        if not alist.base_url:
+        alist = normalized_dict.get("alist", {}) or {}
+        base_url = alist.get("base_url", "")
+        if not base_url:
             add_error("alist.base_url", "base_url is required")
-        elif not self._validate_url(alist.base_url):
+        elif not self._validate_url(base_url):
             add_error("alist.base_url", "Invalid URL")
 
-        if not alist.download_path:
-            add_error("alist.download_path", "download_path is required")
+        subscribe_urls = list((normalized_dict.get("mikan", {}) or {}).get("subscribe_url", []) or [])
+        if len(subscribe_urls) > 0:
+            for idx, url in enumerate(subscribe_urls):
+                if not self._validate_url(url):
+                    add_error(f"mikan.subscribe_url[{idx}]", "Invalid RSS URL")
 
-        for idx, url in enumerate(normalized.mikan.subscribe_url or []):
-            if not self._validate_url(url):
-                add_error(f"mikan.subscribe_url[{idx}]", "Invalid RSS URL")
-
-        if normalized.webdav.timeout < 5:
+        webdav_cfg = normalized_dict.get("webdav", {}) or {}
+        if webdav_cfg.get("timeout", 0) < 5:
             add_error("webdav.timeout", "timeout must be >= 5 seconds")
 
         return {
@@ -79,9 +113,7 @@ class ConfigService:
     async def save_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         async with self._lock:
             await self._ensure_loaded()
-            merged = self._merge_config(self._cache, config)
-
-            validation = await self.validate_config(merged)
+            validation = await self.validate_config(config, strict=True)
             if not validation["valid"]:
                 return {
                     "success": False,
@@ -89,15 +121,18 @@ class ConfigService:
                     "field_errors": validation["field_errors"],
                 }
 
+            merged = self._merge_config(self._cache, config)
+
             backup_created = False
-            if self.config_file.exists():
+            if self.config_file.exists() and not self._meta.get("needs_setup", False):
                 backup_path = self.config_file.with_suffix(self.config_file.suffix + ".backup")
                 shutil.copy(self.config_file, backup_path)
                 backup_created = True
 
             normalized = self._normalize_to_app_config(merged)
-            self._cache = normalized.model_dump()
+            self._cache = normalized.model_dump(mode="json")
             await self._write_yaml(self.config_file, self._cache)
+            self._meta = {"needs_setup": False, "source": "file"}
         return {"success": True, "backup_created": backup_created}
 
     async def get_config_schema(self) -> Dict[str, Any]:
@@ -177,7 +212,7 @@ class ConfigService:
             await self._ensure_loaded()
             merged = self._merge_config(self._cache, config)
 
-        validation = await self.validate_config(merged)
+        validation = await self.validate_config(merged, strict=True)
         if not validation["valid"]:
             return {"success": False, "results": {"validation": validation["errors"]}}
 
@@ -211,10 +246,13 @@ class ConfigService:
         return {"success": success, "results": results}
 
     def _validate_url(self, url: str) -> bool:
-        return url.startswith("http://") or url.startswith("https://")
+        parsed = urlparse(url or "")
+        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
     def _validate_log_level(self, level: str) -> bool:
-        return level.upper() in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        if not level:
+            return False
+        return str(level).upper() in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
     def _validate_interval_time(self, value: int) -> bool:
         try:
@@ -232,26 +270,29 @@ class ConfigService:
             return self._meta.copy()
 
         try:
-            self._cache = await self._read_yaml(self.config_file)
-        except (yaml.YAMLError, ConfigValidationError) as exc:  # pragma: no cover - defensive
-            message = exc.message if isinstance(exc, ConfigValidationError) else str(exc)
+            loaded = await self._read_yaml(self.config_file)
+            merged = self._merge_config(self._default_config(), loaded or {})
+            normalized = self._normalize_to_app_config(merged)
+            self._cache = normalized.model_dump(mode="json")
+            self._meta = {"needs_setup": False, "source": "file"}
+        except (yaml.YAMLError, ConfigValidationError, ValidationError) as exc:  # pragma: no cover - defensive
+            message = getattr(exc, "message", None) or str(exc)
+            backup_path = self.config_file.with_suffix(self.config_file.suffix + ".backup")
+            try:
+                if self.config_file.exists():
+                    shutil.copy(self.config_file, backup_path)
+            except Exception:
+                backup_path = None
             self._cache = self._default_config()
             self._meta = {
                 "needs_setup": True,
                 "source": "default",
                 "recovered_from_error": True,
-                "error": message,
+                "error": f"Config file error: {message}",
             }
+            if backup_path:
+                self._meta["backup_path"] = str(backup_path)
             await self._write_yaml(self.config_file, self._cache)
-            return self._meta.copy()
-
-        if not self._cache:
-            self._cache = self._default_config()
-            await self._write_yaml(self.config_file, self._cache)
-            self._meta = {"needs_setup": True, "source": "default"}
-        else:
-            self._cache = self._merge_config(self._default_config(), self._cache)
-            self._meta = {"needs_setup": False, "source": "file"}
 
         return self._meta.copy()
 
@@ -274,33 +315,30 @@ class ConfigService:
                 "proxies": {},
             },
             "alist": {
-                "base_url": "http://localhost:5244",
+                "base_url": "http://127.0.0.1:5244",
                 "token": "",
                 "downloader": "qBittorrent",
-                "download_path": "",
+                "download_path": "/downloads",
                 "convert_torrent_to_magnet": False,
             },
             "mikan": {
-                "subscribe_url": [],
+                "subscribe_url": ["https://mikanani.me/RSS/"],
                 "filters": [],
                 "regex_pattern": {},
             },
             "notification": {
-                "telegram": {
-                    "enable": False,
-                    "bot_token": "",
-                    "chat_id": "",
-                },
-                "pushplus": {
-                    "enable": False,
-                    "token": "",
-                },
+                "enable": False,
+                "interval_time": 300,
+                "bots": [],
             },
             "rename": {
                 "enable": False,
-                "extractor_type": "openai",
-                "model": "",
-                "api_key": "",
+                "rename_format": "{name} S{season:02d}E{episode:02d}",
+                "remap": {
+                    "enable": False,
+                    "cfg_path": "./remap.yaml",
+                },
+                "extractor": None,
             },
             "webdav": {
                 "username": "admin",
@@ -333,8 +371,7 @@ class ConfigService:
                 "bots": [],
             },
             "dev": {
-                "enable_mock_webdav": False,
-                "enable_mock_alist": False,
+                "log_level": "INFO",
             },
         }
 
@@ -353,7 +390,8 @@ class ConfigService:
     def _normalize_to_app_config(self, config: Dict[str, Any]) -> AppConfig:
         if isinstance(config, AppConfig):
             return config
-        return AppConfig.model_validate(config)
+        merged = self._merge_config(self._default_config(), config or {})
+        return AppConfig.model_validate(merged)
 
 
 _config_service: Optional[ConfigService] = None

@@ -466,6 +466,8 @@ class TestConfigAPIUS2:
         assert response.status_code == 200
         data = response.json()
         assert data["common"]["interval_time"] >= 60
+        assert isinstance(data["alist"]["base_url"], str)
+        assert isinstance(data["alist"]["download_path"], str)
         assert data["_meta"]["needs_setup"] is True
         assert data["_meta"]["source"] == "default"
 
@@ -531,6 +533,51 @@ class TestConfigAPIUS2:
         detail = response.json()["detail"]
         assert "common.interval_time" in detail["field_errors"]
         assert "alist.base_url" in detail["field_errors"]
+        assert "alist.token" in detail["field_errors"]
+        assert "alist.download_path" in detail["field_errors"]
+        assert "mikan.subscribe_url" in detail["field_errors"]
+        assert detail["success"] is False
+        assert isinstance(detail["errors"], list)
+
+    def test_validate_config_reports_missing_required_fields(self, tmp_path, monkeypatch):
+        config_path = tmp_path / "config.yaml"
+        self._override_config_service(monkeypatch, config_path)
+
+        invalid_config = {
+            "common": {"interval_time": 10, "log_level": "INVALID"},
+            "alist": {"base_url": "", "token": "", "download_path": ""},
+            "mikan": {"subscribe_url": []},
+        }
+
+        response = self.client.post("/api/config/validate", json=invalid_config)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["valid"] is False
+        assert "common.interval_time" in data["field_errors"]
+        assert "common.log_level" in data["field_errors"]
+        assert "alist.base_url" in data["field_errors"]
+        assert "alist.token" in data["field_errors"]
+        assert "alist.download_path" in data["field_errors"]
+        assert "mikan.subscribe_url" in data["field_errors"]
+
+    def test_test_config_returns_validation_errors_when_invalid(self, tmp_path, monkeypatch):
+        config_path = tmp_path / "config.yaml"
+        self._override_config_service(monkeypatch, config_path)
+
+        invalid_config = {
+            "common": {"interval_time": 30},
+            "alist": {"base_url": "invalid", "token": "", "download_path": ""},
+            "mikan": {"subscribe_url": []},
+        }
+
+        response = self.client.post("/api/config/test", json=invalid_config)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert "validation" in data["results"]
+        assert any("alist.base_url" in err["field"] for err in data["results"]["validation"])
 
 
 class TestWebUIPages:

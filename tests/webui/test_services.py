@@ -465,6 +465,14 @@ class TestConfigService:
             "common": {
                 "interval_time": 600,
                 "log_level": "DEBUG"
+            },
+            "alist": {
+                "base_url": "http://localhost:5244",
+                "token": "token",
+                "download_path": "/downloads"
+            },
+            "mikan": {
+                "subscribe_url": ["https://example.com/rss"]
             }
         }
 
@@ -489,7 +497,17 @@ class TestConfigService:
     @pytest.mark.asyncio
     async def test_save_config_backup(self, config_service):
         """测试保存配置时创建备份"""
-        test_config = {"common": {"interval_time": 600}}
+        test_config = {
+            "common": {"interval_time": 600, "log_level": "INFO"},
+            "alist": {
+                "base_url": "http://localhost:5244",
+                "token": "token",
+                "download_path": "/downloads",
+            },
+            "mikan": {
+                "subscribe_url": ["https://example.com/rss"],
+            },
+        }
 
         with tempfile.NamedTemporaryFile(suffix='.yaml', delete=False) as f:
             temp_file = f.name
@@ -528,7 +546,8 @@ class TestConfigService:
         test_config = {
             "alist": {
                 "base_url": "http://localhost:5244",
-                "token": "test-token"
+                "token": "test-token",
+                "download_path": "/downloads",
             },
             "mikan": {
                 "subscribe_url": ["https://mikanani.me/RSS/MyBangumi?token=test"]
@@ -553,7 +572,8 @@ class TestConfigService:
         test_config = {
             "alist": {
                 "base_url": "http://invalid-url:9999",
-                "token": "test-token"
+                "token": "test-token",
+                "download_path": "/downloads",
             }
         }
 

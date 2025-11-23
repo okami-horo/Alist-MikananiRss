@@ -194,7 +194,12 @@ class LogService:
 
     def _collect_all_entries(self) -> List[LogEntry]:
         entries: List[LogEntry] = []
-        for path in sorted(self.log_dir.glob("*.log")):
+        log_files = sorted(
+            self.log_dir.glob("*.log"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )[:1]
+        for path in log_files:
             entries.extend(self._load_entries_from_path(path))
         return entries
 

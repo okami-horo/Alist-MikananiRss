@@ -466,11 +466,23 @@
 
             const response = await fetch(url, { ...defaultOptions, ...options });
 
-            if (!response.ok) {
-                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (err) {
+                data = null;
             }
 
-            return response.json();
+            if (!response.ok) {
+                const detail = data?.detail;
+                const message = detail?.message || data?.message || `API Error: ${response.status} ${response.statusText}`;
+                const error = new Error(message);
+                error.status = response.status;
+                error.payload = data;
+                throw error;
+            }
+
+            return data;
         }
 
         // 通知系统

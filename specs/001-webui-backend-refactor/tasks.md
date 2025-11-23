@@ -59,12 +59,12 @@
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] 扩充配置 API 测试用例，覆盖无配置文件、配置损坏、保存时备份与验证失败的路径，在实现或重构 ConfigService 与配置 API 前锁定这些行为的预期（Test-First）（tests/webui/test_api.py）
-- [ ] T021 [US2] 在 WebUI 集成测试中添加“首次访问进入引导配置模式并完成保存”的端到端场景，在实现配置页面与后端行为前先通过失败用例驱动实现与重构（tests/webui/test_integration.py）
-- [ ] T016 [P] [US2] 梳理并补充 ConfigService 的默认配置、加载/合并/备份策略，保证缺失或损坏配置文件时能自动回退到安全默认值（src/alist_mikananirss/webui/services/config_service.py）
-- [ ] T017 [P] [US2] 确认 `/api/config/current`、`/api/config/validate`、`/api/config/save`、`/api/config/schema`、`/api/config/test` 行为与 spec 中 FR-004 描述保持一致（src/alist_mikananirss/webui/api/config.py）
-- [ ] T018 [US2] 实现/完善配置页面表单结构，将 schema 映射到表单控件并支持增删 RSS 订阅与过滤规则（src/alist_mikananirss/webui/templates/config.html）
-- [ ] T019 [P] [US2] 为配置页面编写前端脚本：加载当前配置、执行“测试配置”调用、展示验证结果和外部连通性状态（src/alist_mikananirss/webui/static/js/config.js）
+- [x] T020 [US2] 扩充配置 API 测试用例，覆盖无配置文件、配置损坏、保存时备份与验证失败的路径，在实现或重构 ConfigService 与配置 API 前锁定这些行为的预期（Test-First）（tests/webui/test_api.py）
+- [x] T021 [US2] 在 WebUI 集成测试中添加“首次访问进入引导配置模式并完成保存”的端到端场景，在实现配置页面与后端行为前先通过失败用例驱动实现与重构（tests/webui/test_integration.py）
+- [x] T016 [P] [US2] 梳理并补充 ConfigService 的默认配置、加载/合并/备份策略，保证缺失或损坏配置文件时能自动回退到安全默认值（src/alist_mikananirss/webui/services/config_service.py）
+- [x] T017 [P] [US2] 确认 `/api/config/current`、`/api/config/validate`、`/api/config/save`、`/api/config/schema`、`/api/config/test` 行为与 spec 中 FR-004 描述保持一致（src/alist_mikananirss/webui/api/config.py）
+- [x] T018 [US2] 实现/完善配置页面表单结构，将 schema 映射到表单控件并支持增删 RSS 订阅与过滤规则（src/alist_mikananirss/webui/templates/config.html）
+- [x] T019 [P] [US2] 为配置页面编写前端脚本：加载当前配置、执行“测试配置”调用、展示验证结果和外部连通性状态（src/alist_mikananirss/webui/static/js/config.js）
 
 **Checkpoint**: 在没有 `config.yaml` 的环境中，用户可以通过 WebUI 完成配置创建、校验、保存与连通性测试。
 

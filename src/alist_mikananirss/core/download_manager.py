@@ -56,6 +56,7 @@ class TaskMonitor:
         self._webdav_fix_enabled = enable_webdav_fix
         self.enable_webdav_fix = enable_webdav_fix
         self.webdav_fixer = webdav_fixer
+        self._prefetched_transfer_tasks: list[AlistTransferTask] | None = None
 
         self.lock = asyncio.Lock()
         self.coroutine = None
@@ -96,23 +97,30 @@ class TaskMonitor:
         retry_error_callback=lambda _: None,
     )
     async def _find_transfer_task(
-        self, download_task: AlistDownloadTask
+        self, download_task: AlistDownloadTask, transfer_task_list: list[AlistTransferTask] | None = None
     ) -> Optional[AlistTransferTask]:
         """Find the transfer task that is related to the download task
 
         Args:
             download_task (AlistDownloadTask): The download task to find the transfer task for
+            transfer_task_list (list[AlistTransferTask] | None): Optional pre-fetched transfer task list
 
         Returns:
             Optional[AlistTransferTask]: The transfer task if found, None otherwise
         """
         try:
-            transfer_task_list: list[AlistTransferTask] = (
-                await self.alist_client.get_task_list(AlistTaskType.TRANSFER)
-            )
+            if transfer_task_list is None:
+                transfer_task_list = self._prefetched_transfer_tasks
+            if transfer_task_list is None:
+                transfer_task_list = await self.alist_client.get_task_list(AlistTaskType.TRANSFER)
         except Exception as e:
             logger.warning(f"Error when getting transfer task list: {e}")
             return None
+        return self._select_transfer_task(download_task, transfer_task_list)
+
+    def _select_transfer_task(
+        self, download_task: AlistDownloadTask, transfer_task_list: list[AlistTransferTask]
+    ) -> Optional[AlistTransferTask]:
         # Filter out the transfer tasks by start_time and state
         transfer_task_list = [
             task
@@ -156,53 +164,32 @@ class TaskMonitor:
         Returns:
             Optional[AlistTransferTask]: The transfer task if found, None otherwise
         """
-        # Filter out the transfer tasks by start_time and state
-        transfer_task_list = [
-            task
-            for task in all_transfer_tasks
-            if (
-                # 1. The transfer task is not already linked
-                task.uuid not in self.uuid_set
-                # 2. It's a video file
-                and utils.is_video(task.target_path)
-                # 3. It's created after the download task
-                and task.start_time > download_task.start_time
-                # 4. The transfer task is in a valid state
-                and task.state
-                in [
-                    AlistTaskState.Pending,
-                    AlistTaskState.Running,
-                    AlistTaskState.Succeeded,
-                ]
-                # 5. Same anime, same season (looser matching)
-                and download_task.download_path in task.target_path
-            )
-        ]
-        if len(transfer_task_list) == 0:
-            return None
-        # Sort by start time, the latest one first
-        transfer_task_list.sort(key=lambda x: x.start_time, reverse=True)
-        matched_tf_task = transfer_task_list[0]
-        self.uuid_set.add(matched_tf_task.uuid)
-        logger.debug(f"Linked [{download_task.url}] to {matched_tf_task.uuid}")
-        return matched_tf_task
+        return self._select_transfer_task(download_task, all_transfer_tasks)
 
     async def _post_process(self, task: AlistTask, resource: ResourceInfo):
         "Something to do after download task success"
         logger.info(f"Download {resource.resource_title} success")
+        remote_filepath = None
         if self.use_renamer:
             # Get target path from different task types
             if task.task_type == AlistTaskType.TRANSFER:
-                remote_filepath = task.target_path
+                remote_filepath = getattr(task, "target_path", None)
             elif task.task_type == AlistTaskType.DOWNLOAD:
                 # For download tasks, construct path from download_path and name
-                remote_filepath = f"{task.download_path}/{task.name}"
+                name = getattr(task, "name", None)
+                download_path = getattr(task, "download_path", None)
+                if name and download_path:
+                    remote_filepath = f"{download_path}/{name}"
+                else:
+                    logger.warning(
+                        f"Cannot determine remote filepath for download task {getattr(task, 'tid', 'unknown')}, skip renaming"
+                    )
             else:
                 logger.warning(f"Unknown task type: {task.task_type}")
-                return
 
+        if self.use_renamer and remote_filepath:
             await AnimeRenamer.rename(remote_filepath, resource)
-        if self.need_notification:
+        if self.need_notification and NotificationSender in Singleton._instances:
             await NotificationSender.add_resource(resource)
 
     async def _process_successed_tasks(self, task_list: list[AlistTask]):
@@ -225,9 +212,10 @@ class TaskMonitor:
             try:
                 # Single API call for all download tasks
                 all_transfer_tasks = await self.alist_client.get_task_list(AlistTaskType.TRANSFER)
+                self._prefetched_transfer_tasks = all_transfer_tasks
 
                 for task in download_tasks:
-                    tf_task = self._find_transfer_task_optimized(task, all_transfer_tasks)
+                    tf_task = await self._find_transfer_task(task)
                     if tf_task is None:
                         # No transfer task found, assume direct download (e.g., 115 Cloud internal storage)
                         resource = self.task_resource_map[task]
@@ -243,6 +231,8 @@ class TaskMonitor:
                 for task in download_tasks:
                     resource = self.task_resource_map[task]
                     await self._post_process(task, resource)
+            finally:
+                self._prefetched_transfer_tasks = None
 
     async def _process_failed_tasks(self, task_list: list[AlistTask]):
         """Process the failed tasks
