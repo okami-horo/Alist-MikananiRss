@@ -24,12 +24,16 @@ class CommonConfig(BaseModel):
 
 
 class AlistConfig(BaseModel):
-    base_url: str = Field(..., description="Base URL of Alist")
-    token: str = Field(..., description="Token for Alist API")
+    base_url: str = Field(
+        default="http://127.0.0.1:5244", description="Base URL of Alist"
+    )
+    token: str = Field(default="", description="Token for Alist API")
     downloader: AlistDownloaderType = Field(
         default=AlistDownloaderType.QBIT, description="Alist Downloader type"
     )
-    download_path: str = Field(..., description="Download path for Alist Downloader")
+    download_path: str = Field(
+        default="/downloads", description="Download path for Alist Downloader"
+    )
     convert_torrent_to_magnet: bool = Field(
         default=False,
         description="Convert torrent files to magnet links before downloading",
@@ -48,7 +52,9 @@ class AlistConfig(BaseModel):
 
 
 class MikanConfig(BaseModel):
-    subscribe_url: List[str] = Field(min_length=1)
+    subscribe_url: List[str] = Field(
+        default_factory=lambda: ["https://mikanani.me/RSS/"], min_length=1
+    )
     regex_pattern: Dict[str, str] = Field(
         default_factory=dict,
         description="Regex pattern for filter",

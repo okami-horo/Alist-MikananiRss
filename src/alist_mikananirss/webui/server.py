@@ -49,13 +49,35 @@ TEMPLATE_DIR = PACKAGE_ROOT / "templates"
 
 
 def _resolve_config_path() -> Path:
-    return Path(os.environ.get("ALIST_MIKAN_CONFIG", "config.yaml"))
+    env_path = os.environ.get("ALIST_MIKAN_CONFIG")
+    if env_path:
+        return Path(env_path)
+
+    default_name = "config.yaml"
+    cwd_candidate = Path.cwd() / default_name
+    exe_candidate = Path(sys.argv[0]).resolve().parent / default_name
+
+    if cwd_candidate.exists():
+        return cwd_candidate
+    if exe_candidate.exists():
+        return exe_candidate
+    return cwd_candidate
 
 
 def _load_app_config(config_path: Path) -> AppConfig:
     manager = ConfigManager()
     try:
         return manager.load_config(config_path)
+    except FileNotFoundError:
+        logger.warning("Config file %s not found; generating defaults", config_path)
+        default_cfg = AppConfig()
+        try:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(str(default_cfg), encoding="utf-8")
+            logger.info("Wrote default config to %s", config_path)
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("Failed to write default config to %s", config_path)
+        return default_cfg
     except Exception:  # pragma: no cover - defensive
         logger.exception("Failed to load config from %s, falling back to defaults", config_path)
         return AppConfig()

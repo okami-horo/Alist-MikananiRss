@@ -48,7 +48,7 @@ class ConfigManager:
 
     def load_config(self, path):
         with open(path, "r", encoding="utf-8") as f:
-            config_dict = yaml.safe_load(f)
+            config_dict = yaml.safe_load(f) or {}
         self.config_path = path
         self.config = AppConfig.model_validate(config_dict)
         return self.config
