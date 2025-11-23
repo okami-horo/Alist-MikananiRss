@@ -358,7 +358,7 @@
                 loadSystemStatus(),
                 loadRecentActivities()
             ]);
-            await renderSystemControls(status.status);
+            await renderSystemControls(status.service_status || status.status);
             document.getElementById('heroUpdated').textContent = `最后更新：${formatTime(new Date())}`;
         } catch (error) {
             console.error('加载仪表板数据失败:', error);
@@ -367,17 +367,19 @@
     }
 
     async function loadSystemStatus() {
-        const status = await apiCall('/api/public/system/status');
+        const status = await fetchServiceStatus();
 
         const dot = document.getElementById('systemStatusDot');
         const text = document.getElementById('systemStatusText');
         const summary = document.getElementById('heroSummary');
 
-        if (status.status === 'running') {
+        const state = status.service_status || status.status;
+
+        if (state === 'running') {
             dot.className = 'status-dot status-dot--active';
             text.textContent = '运行中';
             summary.textContent = '订阅服务已启动并保持监控。';
-        } else if (status.status === 'stopped') {
+        } else if (state === 'stopped') {
             dot.className = 'status-dot status-dot--inactive';
             text.textContent = '已停止';
             summary.textContent = '订阅服务已停止，可根据需要重新启动。';
@@ -493,11 +495,19 @@
         return colors[level] || 'secondary';
     }
 
+    async function controlService(action) {
+        try {
+            return await apiCall(`/api/admin/service/${action}`, { method: 'POST' });
+        } catch (error) {
+            return await apiCall(`/api/admin/system/${action}`, { method: 'POST' });
+        }
+    }
+
     async function startSystem() {
         confirmAction('确定要启动服务吗？', async () => {
             try {
                 showNotification('正在启动服务...', 'info');
-                await apiCall('/api/admin/system/start', { method: 'POST' });
+                await controlService('start');
                 showNotification('服务启动成功', 'success');
                 await loadDashboard();
             } catch (error) {
@@ -510,7 +520,7 @@
         confirmAction('确定要停止服务吗？', async () => {
             try {
                 showNotification('正在停止服务...', 'info');
-                await apiCall('/api/admin/system/stop', { method: 'POST' });
+                await controlService('stop');
                 showNotification('服务停止成功', 'success');
                 await loadDashboard();
             } catch (error) {
@@ -523,7 +533,7 @@
         confirmAction('确定要重启服务吗？', async () => {
             try {
                 showNotification('正在重启服务...', 'info');
-                await apiCall('/api/admin/system/restart', { method: 'POST' });
+                await controlService('restart');
                 showNotification('服务重启成功', 'success');
                 await loadDashboard();
             } catch (error) {

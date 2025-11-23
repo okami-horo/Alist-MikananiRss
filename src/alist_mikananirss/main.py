@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import os
 import sys
+import webbrowser
 
 from loguru import logger
 
@@ -141,6 +142,8 @@ async def run_webui(args, cfg):
     logger.info("启动WebUI服务器")
 
     try:
+        if hasattr(args, "config") and args.config:
+            os.environ.setdefault("ALIST_MIKAN_CONFIG", args.config)
         import uvicorn
         from alist_mikananirss.webui.server import app
 
@@ -164,18 +167,28 @@ async def run_webui(args, cfg):
         logger.info(f"WebUI服务器启动成功: http://{host}:{port}")
         if debug:
             logger.info("调试模式已启用，支持热重载")
+        if cfg.webui.auto_open_browser and (debug or host in {"127.0.0.1", "localhost"}):
+            asyncio.create_task(_open_browser_after_delay(host, port))
         logger.info("按 Ctrl+C 停止服务器")
 
         await server.serve()
 
     except ImportError:
-        logger.error("WebUI依赖未安装，请安装: pip install fastapi uvicorn jinja2 python-multipart")
+        logger.error("WebUI依赖未安装，请安装: uv pip install fastapi uvicorn jinja2 python-multipart")
         return False
     except Exception as e:
         logger.error(f"WebUI服务器启动失败: {str(e)}")
         return False
 
     return True
+
+
+async def _open_browser_after_delay(host: str, port: int) -> None:
+    await asyncio.sleep(0.5)
+    try:
+        webbrowser.open(f"http://{host}:{port}")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(f"自动打开浏览器失败: {exc}")
 
 
 async def run_monitor_only(args, cfg):

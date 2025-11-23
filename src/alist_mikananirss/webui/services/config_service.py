@@ -7,6 +7,7 @@ import copy
 import logging
 import shutil
 from pathlib import Path
+import os
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
@@ -23,8 +24,9 @@ logger = logging.getLogger(__name__)
 class ConfigService:
     """Manage application configuration stored in YAML files."""
 
-    def __init__(self, config_path: str = "config.yaml") -> None:
-        self.config_file = Path(config_path)
+    def __init__(self, config_path: str | Path | None = None) -> None:
+        resolved_path = config_path or os.environ.get("ALIST_MIKAN_CONFIG", "config.yaml")
+        self.config_file = Path(resolved_path)
         self._lock = asyncio.Lock()
         self._cache: Dict[str, Any] = {}
         self._meta: Dict[str, Any] = {"needs_setup": False, "source": "file"}
@@ -412,6 +414,13 @@ class ConfigService:
                 "debug": False,
                 "secret_key": "alist-mikananirss-webui-secret-key",
                 "session_timeout": 3600,
+                "cors_origins": ["http://127.0.0.1:8080", "http://localhost:8080"],
+                "allowed_hosts": ["localhost", "127.0.0.1"],
+                "auth_enabled": True,
+                "auth_header": "X-API-Key",
+                "auto_start_monitor": True,
+                "use_cdn_assets": False,
+                "auto_open_browser": False,
             },
             "bot_assistant": {
                 "enable": False,

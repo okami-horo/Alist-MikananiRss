@@ -9,6 +9,7 @@ WebUI服务层模块
 
 from __future__ import annotations
 
+import os
 from typing import Dict
 
 from .system_service import SystemService, get_system_service, system_service
@@ -21,7 +22,7 @@ _service_registry: ServiceRegistry | None = None
 
 def _build_registry() -> ServiceRegistry:
     return {
-        "system": get_system_service(),
+        "system": get_system_service(os.environ.get("ALIST_MIKAN_CONFIG")),
         "logs": get_log_service(),
         "config": get_config_service(),
     }

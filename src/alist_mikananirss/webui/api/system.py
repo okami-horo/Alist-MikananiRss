@@ -15,6 +15,8 @@ from ..services.system_service import get_system_service, system_service
 public_router = APIRouter()
 control_router = APIRouter()
 legacy_router = APIRouter()
+service_public_router = APIRouter()
+service_control_router = APIRouter()
 
 async def _resolve(value: Any) -> Any:
     if inspect.isawaitable(value):
@@ -75,8 +77,14 @@ async def restart_system() -> dict:
 
 @public_router.get("/health")
 async def health_check() -> dict:
-    healthy = await _resolve(system_service.health_check())
-    return {"healthy": healthy, "timestamp": datetime.utcnow().isoformat()}
+    status = _as_dict(await _resolve(system_service.get_system_status()))
+    healthy = status.get("status") == "running" and not status.get("last_error")
+    return {
+        "healthy": bool(healthy),
+        "status": status.get("status"),
+        "last_error": status.get("last_error"),
+        "timestamp": datetime.utcnow().isoformat(),
+    }
 
 
 @public_router.options("/status", include_in_schema=False)
@@ -90,12 +98,16 @@ async def options_status() -> Response:
 
 legacy_router.include_router(public_router)
 legacy_router.include_router(control_router)
+service_public_router.include_router(public_router)
+service_control_router.include_router(control_router)
 router = legacy_router
 
 # Provide the getter in __all__ for tests/consumers needing a fresh instance.
 __all__ = [
     "public_router",
     "control_router",
+    "service_public_router",
+    "service_control_router",
     "router",
     "get_system_service",
     "system_service",

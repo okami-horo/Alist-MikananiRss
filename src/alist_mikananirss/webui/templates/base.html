@@ -9,11 +9,21 @@
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='images/favicon.ico') }}">
 
     <!-- CSS框架 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    {% set use_cdn = request.app.state.webui_use_cdn if request and request.app else False %}
+    {% if use_cdn %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    {% else %}
+    <link rel="stylesheet" href="{{ url_for('static', path='vendor/bootstrap/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='vendor/bootstrap-icons/bootstrap-icons.css') }}">
+    {% endif %}
 
     <!-- 自定义样式表 -->
     <link rel="stylesheet" href="{{ url_for('static', path='css/webui.css') }}">
+    <script>
+        window.WEBUI_AUTH_TOKEN = {{ api_token | default('') | tojson }};
+        window.WEBUI_AUTH_HEADER = {{ auth_header | default('X-API-Key') | tojson }};
+    </script>
 
     <!-- 自定义样式 -->
     <style>
@@ -366,7 +376,11 @@
     </nav>
 
     <!-- JavaScript库 -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% if use_cdn %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    {% else %}
+    <script src="{{ url_for('static', path='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+    {% endif %}
 
     <!-- 通用JavaScript -->
     <script>
@@ -458,13 +472,21 @@
 
         // 通用API调用函数
         async function apiCall(url, options = {}) {
-            const defaultOptions = {
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            };
+            const headers = Object.assign({
+                'Content-Type': 'application/json',
+            }, options.headers || {});
 
-            const response = await fetch(url, { ...defaultOptions, ...options });
+            const token = window.WEBUI_AUTH_TOKEN || localStorage.getItem('webui_token') || '';
+            const authHeader = window.WEBUI_AUTH_HEADER || 'X-API-Key';
+            if (token && !headers[authHeader]) {
+                headers[authHeader] = token;
+            }
+
+            const response = await fetch(url, {
+                ...options,
+                headers,
+                credentials: options.credentials || 'same-origin',
+            });
 
             let data = null;
             try {
@@ -483,6 +505,14 @@
             }
 
             return data;
+        }
+
+        async function fetchServiceStatus() {
+            try {
+                return await apiCall('/api/public/service/status');
+            } catch (error) {
+                return await apiCall('/api/public/system/status');
+            }
         }
 
         // 通知系统
@@ -548,7 +578,7 @@
         // 系统信息显示
         async function showSystemInfo() {
             try {
-                const info = await apiCall('/api/public/system/status');
+                const info = await fetchServiceStatus();
                 const modal = new bootstrap.Modal(document.getElementById('systemInfoModal'));
 
                 document.getElementById('systemInfoContent').innerHTML = `
@@ -558,9 +588,10 @@
                             <p><strong>版本:</strong> ${info.version || '0.5.5'}</p>
                             <p><strong>运行时间:</strong> ${info.uptime || 'N/A'}</p>
                             <p><strong>状态:</strong>
-                                <span class="status-indicator ${info.status === 'running' ? 'status-running' : 'status-stopped'}"></span>
-                                ${info.status || 'Unknown'}
+                                <span class="status-indicator ${(info.service_status || info.status) === 'running' ? 'status-running' : 'status-stopped'}"></span>
+                                ${info.service_status || info.status || 'Unknown'}
                             </p>
+                            <p><strong>最后错误:</strong> ${info.last_error || '无'}</p>
                         </div>
                         <div class="col-md-6">
                             <h6>系统资源</h6>

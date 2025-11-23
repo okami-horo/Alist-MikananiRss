@@ -4,6 +4,8 @@ WebUI数据模型定义
 定义WebUI相关的数据模型和响应结构，使用Pydantic进行数据验证。
 """
 
+from __future__ import annotations
+
 import os
 from datetime import datetime, timezone
 from enum import Enum
@@ -40,12 +42,16 @@ class SystemStatusEnum(str, Enum):
 class SystemStatus(BaseModel):
     """系统状态信息，用于API响应"""
 
+    model_config = ConfigDict(extra="ignore")
     status: str = Field(..., description="当前状态，如 running/stopped")
     uptime: str = Field("0:00:00", description="运行时长，格式为 HH:MM:SS")
     cpu_usage: float = Field(0.0, ge=0, le=100, description="CPU使用率")
     memory_usage: float = Field(0.0, ge=0, le=100, description="内存使用率")
     disk_usage: float = Field(0.0, ge=0, le=100, description="磁盘使用率")
     version: Optional[str] = Field(None, description="应用版本号")
+    process_info: Optional["ProcessInfo"] = Field(None, description="进程信息")
+    last_error: Optional[str] = Field(None, description="最后错误信息")
+    service_status: Optional[str] = Field(None, description="订阅服务状态别名")
 
     @field_validator("status")
     @classmethod
@@ -284,12 +290,22 @@ class OperationResult(BaseModel):
 
 class WebUIConfig(BaseModel):
     """WebUI配置"""
+    model_config = ConfigDict(extra="ignore")
     host: str = Field(default="127.0.0.1", description="服务器地址")
     port: int = Field(default=8080, ge=1, le=65535, description="服务器端口")
     debug: bool = Field(default=False, description="调试模式")
     secret_key: str = Field(default="dev-secret-key", description="密钥")
-    cors_origins: List[str] = Field(default_factory=lambda: ["*"], description="CORS允许源")
+    session_timeout: int = Field(default=3600, ge=300, description="会话超时时间（秒）")
+    cors_origins: List[str] = Field(
+        default_factory=lambda: ["http://127.0.0.1:8080", "http://localhost:8080"],
+        description="CORS允许源"
+    )
+    allowed_hosts: List[str] = Field(default_factory=lambda: ["localhost", "127.0.0.1"], description="受信任主机")
+    auth_enabled: bool = Field(default=True, description="是否启用内置鉴权")
+    auth_header: str = Field(default="X-API-Key", description="鉴权Header名称")
+    auto_start_monitor: bool = Field(default=True, description="是否随WebUI自动启动订阅服务")
     static_files: bool = Field(default=True, description="是否提供静态文件")
+    use_cdn_assets: bool = Field(default=False, description="是否使用CDN加载前端资源")
     auto_open_browser: bool = Field(default=False, description="是否自动打开浏览器")
 
     @field_validator("port")

@@ -219,6 +219,29 @@ class WebUIConfig(BaseModel):
     session_timeout: int = Field(
         default=3600, ge=300, description="会话超时时间（秒）"
     )
+    cors_origins: List[str] = Field(
+        default_factory=lambda: ["http://127.0.0.1:8080", "http://localhost:8080"],
+        description="允许的跨域来源",
+    )
+    allowed_hosts: List[str] = Field(
+        default_factory=lambda: ["localhost", "127.0.0.1"],
+        description="允许的主机名",
+    )
+    auth_enabled: bool = Field(
+        default=True, description="是否启用内置Header Token鉴权"
+    )
+    auth_header: str = Field(
+        default="X-API-Key", description="用于鉴权的Header名称"
+    )
+    auto_start_monitor: bool = Field(
+        default=True, description="WebUI启动时是否自动启动订阅服务"
+    )
+    use_cdn_assets: bool = Field(
+        default=False, description="是否使用CDN加载前端资源"
+    )
+    auto_open_browser: bool = Field(
+        default=False, description="启动WebUI后自动打开浏览器（仅开发/本地环境建议启用）"
+    )
 
 
 class DevConfig(BaseModel):
