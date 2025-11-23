@@ -56,12 +56,35 @@ Docker，源码运行等更多的运行方法详见[使用文档](https://github
 
 ```bash
 uv sync  # 安装/更新依赖
-uv run alist-mikananirss-webui --host 0.0.0.0 --port 8080
+  uv run alist-mikananirss-webui --host 0.0.0.0 --port 8080
 ```
 
 - WebUI 会在浏览器中提供仪表盘、日志、配置与 WebDAV 维护页面，默认访问地址为 `http://<主机IP>:8080/`。
 - 可通过 `--reload`、`--log-level` 等参数调整开发体验。
 - 详细说明与端到端操作示例见 `specs/001-webui-backend-refactor/quickstart.md`。
+
+### 二进制打包（PyInstaller, linux/arm64）
+
+已提供 GitHub Actions 工作流，使用 uv + PyInstaller 产出适用于 Linux ARM64 的单文件可执行：
+
+- 工作流: `.github/workflows/build_pyinstaller_webui_arm64.yml`
+- 触发方式：推送 `v*` 标签或手动 `workflow_dispatch`
+- 构建产物：`alist-mikananirss-webui`（onefile）
+
+本地 ARM64 主机也可手动构建（需 Python 3.12+ 与 uv）：
+
+```bash
+uv sync --no-dev
+uv run --with pyinstaller pyinstaller \
+  --noconfirm --clean --name alist-mikananirss-webui --onefile \
+  --collect-all jinja2 \
+  --add-data 'src/alist_mikananirss/webui/templates:alist_mikananirss/webui/templates' \
+  --add-data 'src/alist_mikananirss/webui/static:alist_mikananirss/webui/static' \
+  src/alist_mikananirss/webui/__main__.py
+
+# 运行
+./dist/alist-mikananirss-webui --host 0.0.0.0 --port 8080
+```
 
 ### 路径分区与访问控制
 

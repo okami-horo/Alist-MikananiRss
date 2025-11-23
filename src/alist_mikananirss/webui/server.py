@@ -5,6 +5,7 @@ FastAPI应用主服务器
 """
 
 import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator, Optional
@@ -20,7 +21,21 @@ from .api import register_api_routes
 from .services import refresh_service_registry
 
 logger = logging.getLogger(__name__)
-PACKAGE_ROOT = Path(__file__).resolve().parent
+def _get_package_root() -> Path:
+    """Return the base path for bundled resources.
+
+    When running as a PyInstaller onefile binary, resources are extracted
+    into the temporary directory referenced by ``sys._MEIPASS``. We bundle
+    ``static`` and ``templates`` under ``alist_mikananirss/webui``.
+    """
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        base = Path(meipass) / "alist_mikananirss" / "webui"
+        return base
+    return Path(__file__).resolve().parent
+
+
+PACKAGE_ROOT = _get_package_root()
 STATIC_DIR = PACKAGE_ROOT / "static"
 TEMPLATE_DIR = PACKAGE_ROOT / "templates"
 
