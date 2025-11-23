@@ -1,9 +1,20 @@
-"""Module entry point for launching the WebUI via CLI tools."""
+"""Module entry point for launching the WebUI via CLI tools.
+
+This entry uses a direct import of the FastAPI application object to ensure
+packagers like PyInstaller can statically analyze and include the module
+graph (avoiding string-based dynamic imports).
+"""
 
 from __future__ import annotations
 
 import argparse
 import uvicorn
+try:
+    # Prefer absolute import so PyInstaller can resolve package graph.
+    from alist_mikananirss.webui import server as webui_server
+except Exception:  # pragma: no cover - defensive fallback
+    # Fallback to relative import when running via `python -m`.
+    from . import server as webui_server  # type: ignore
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,7 +38,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     uvicorn.run(
-        "alist_mikananirss.webui.server:app",
+        webui_server.app,
         host=args.host,
         port=args.port,
         reload=args.reload,
