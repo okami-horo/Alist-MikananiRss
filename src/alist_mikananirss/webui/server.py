@@ -72,7 +72,9 @@ def _allowed_hosts(webui_cfg) -> list[str]:
     hosts = set(getattr(webui_cfg, "allowed_hosts", []) or [])
     host_value = getattr(webui_cfg, "host", None)
     port_value = getattr(webui_cfg, "port", None)
-    if host_value and host_value not in {"0.0.0.0", "0.0.0.0/0"}:
+    if host_value in {"0.0.0.0", "0.0.0.0/0", "::"} or "*" in hosts:
+        hosts = {"*"}
+    elif host_value:
         hosts.add(host_value)
         if port_value:
             hosts.add(f"{host_value}:{port_value}")
