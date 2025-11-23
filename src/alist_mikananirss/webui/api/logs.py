@@ -63,8 +63,19 @@ async def list_log_files() -> list[dict]:
     try:
         files = await _resolve(log_service.get_log_files())
         return [file.model_dump() if _is_model(file) else file for file in files]
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(500, f"Unable to list log files: {exc}") from exc
+
+
+def _parse_level(level: Optional[str]) -> Optional[str]:
+    if not level:
+        return None
+    try:
+        return LogLevel(level.upper())
+    except ValueError as exc:
+        raise HTTPException(400, "Unknown log level") from exc
 
 
 @router.get("/content")
@@ -75,17 +86,24 @@ async def read_log_content(
     level: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
 ) -> dict:
-    result = _normalise_entries_payload(
-        await _resolve(
-            log_service.get_log_content(
-                file=file,
-                limit=limit,
-                offset=offset,
-                level=level,
-                search=search,
+    parsed_level = _parse_level(level)
+    try:
+        result = _normalise_entries_payload(
+            await _resolve(
+                log_service.get_log_content(
+                    file=file,
+                    limit=limit,
+                    offset=offset,
+                    level=parsed_level.value if parsed_level else None,
+                    search=search,
+                )
             )
         )
-    )
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(500, f"Unable to read log file: {exc}") from exc
+
     if not result["entries"] and result["total"] == 0:
         path = await _resolve(log_service.get_log_file_path(file))
         if path is None:
@@ -95,8 +113,11 @@ async def read_log_content(
 
 @router.get("/recent")
 async def recent_logs(limit: int = Query(10, ge=1, le=200)) -> list[dict]:
-    logs = await _resolve(log_service.get_recent_logs(limit=limit))
-    return [log.model_dump() if _is_model(log) else log for log in logs]
+    try:
+        logs = await _resolve(log_service.get_recent_logs(limit=limit))
+        return [log.model_dump() if _is_model(log) else log for log in logs]
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(500, f"Unable to load recent logs: {exc}") from exc
 
 
 @router.get("/search")
@@ -105,15 +126,14 @@ async def search_logs(
     level: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=1000),
 ) -> dict:
-    parsed_level = None
-    if level:
-        try:
-            parsed_level = LogLevel(level.upper())
-        except ValueError as exc:
-            raise HTTPException(400, "Unknown log level") from exc
-    result = await _resolve(
-        log_service.search_logs(q, level=parsed_level.value if parsed_level else None, limit=limit)
-    )
+    parsed_level = _parse_level(level)
+    try:
+        result = await _resolve(
+            log_service.search_logs(q, level=parsed_level.value if parsed_level else None, limit=limit)
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(500, f"Unable to search logs: {exc}") from exc
+
     payload = _normalise_entries_payload(result)
     if payload["total"] == 0:
         fallback_limit = min(limit, 10)

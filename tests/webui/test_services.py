@@ -16,7 +16,14 @@ import os
 from alist_mikananirss.webui.services.system_service import SystemService
 from alist_mikananirss.webui.services.log_service import LogService
 from alist_mikananirss.webui.services.config_service import ConfigService
-from alist_mikananirss.webui.models import SystemStatus, LogEntry, LogFileInfo, ConfigValidationError
+from alist_mikananirss.webui.services.webdav_service import WebDAVService
+from alist_mikananirss.webui.models import (
+    SystemStatus,
+    LogEntry,
+    LogFileInfo,
+    ConfigValidationError,
+    WebdavJobStatus,
+)
 
 
 class TestSystemService:
@@ -279,6 +286,30 @@ class TestLogService:
                     assert "connection" in entry["message"].lower()
 
     @pytest.mark.asyncio
+    async def test_get_log_content_respects_offset_and_limit(self, log_service, sample_log_file):
+        """支持分页参数并返回 has_more 状态"""
+        with patch.object(log_service, 'log_dir', Path(tempfile.gettempdir())):
+            with patch('pathlib.Path.is_file', return_value=True):
+                content = await log_service.get_log_content(
+                    os.path.basename(sample_log_file),
+                    limit=2,
+                    offset=1,
+                )
+
+                assert content["total"] == 5
+                assert len(content["entries"]) == 2
+                assert content["has_more"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_log_content_missing_file(self, log_service):
+        """缺少日志文件时返回清晰错误"""
+        with patch.object(log_service, 'log_dir', Path('/non-existent')):
+            with pytest.raises(FileNotFoundError) as excinfo:
+                await log_service.get_log_content("missing.log")
+
+        assert "missing.log" in str(excinfo.value)
+
+    @pytest.mark.asyncio
     async def test_stream_log_entries(self, tmp_path):
         """测试实时日志流功能"""
         log_dir = tmp_path
@@ -315,6 +346,27 @@ class TestLogService:
                 # 检查是否按时间倒序排列（最新的在前）
                 timestamps = [log["timestamp"] for log in logs]
                 assert timestamps == sorted(timestamps, reverse=True)
+
+    @pytest.mark.asyncio
+    async def test_recent_logs_aggregates_multiple_files(self, tmp_path):
+        """最近日志聚合多个文件并按时间排序"""
+        file1 = tmp_path / "old.log"
+        file2 = tmp_path / "new.log"
+        file1.write_text(
+            "2024-01-01 00:00:00 | INFO | old message\n"
+            "2024-01-01 00:01:00 | ERROR | another old message\n",
+            encoding="utf-8",
+        )
+        file2.write_text(
+            "2025-02-02 10:00:00 | INFO | newer message\n",
+            encoding="utf-8",
+        )
+
+        service = LogService(log_dir=str(tmp_path))
+        logs = await service.get_recent_logs(limit=3)
+
+        timestamps = [item["timestamp"] for item in logs]
+        assert timestamps == sorted(timestamps, reverse=True)
 
     @pytest.mark.asyncio
     async def test_search_logs(self, log_service, sample_log_file):
@@ -675,6 +727,96 @@ class TestServiceIntegration:
             assert status.status == "running"
             assert len(logs) == 1
             assert logs[0]["level"] == "INFO"
+
+
+class TestWebDAVService:
+    """WebDAV 手动修复服务测试"""
+
+    def _minimal_config(self) -> dict:
+        return {
+            "common": {"interval_time": 300, "log_level": "INFO"},
+            "alist": {
+                "base_url": "http://127.0.0.1:5244",
+                "token": "token",
+                "downloader": "qBittorrent",
+                "download_path": "/downloads",
+                "convert_torrent_to_magnet": False,
+            },
+            "mikan": {"subscribe_url": ["https://example.com/rss"], "filters": [], "regex_pattern": {}},
+            "webdav": {
+                "username": "admin",
+                "password": "1234",
+                "manual": {
+                    "enable": True,
+                    "default_path": "/downloads",
+                    "execute_mode": False,
+                    "recursive_scan": True,
+                    "conflict_strategy": "skip",
+                },
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_submit_manual_fix_creates_job_and_updates_status(self, monkeypatch):
+        """提交手动修复任务会生成 Job 并在执行后完成"""
+        service = WebDAVService()
+        monkeypatch.setattr(
+            "alist_mikananirss.webui.services.webdav_service.config_service.get_current_config",
+            AsyncMock(return_value=self._minimal_config()),
+        )
+
+        async def fake_execute(**_kwargs):
+            return {
+                "success": True,
+                "message": "ok",
+                "target_dir": "/data",
+                "dry_run": True,
+                "options": {"execute_mode": False, "recursive_scan": True, "conflict_strategy": "skip"},
+                "result": {"total_found": 2},
+            }
+
+        monkeypatch.setattr(service, "_execute_manual_fix", AsyncMock(side_effect=fake_execute))
+
+        job = await service.submit_manual_fix(path="/data")
+        assert job.status == WebdavJobStatus.QUEUED
+
+        await asyncio.sleep(0.05)
+        stored = await service.get_job(job.id)
+        assert stored is not None
+        assert stored.status == WebdavJobStatus.COMPLETED
+        assert stored.result["total_found"] == 2
+
+    @pytest.mark.asyncio
+    async def test_submit_manual_fix_disallowed_when_disabled(self, monkeypatch):
+        """配置禁用时直接报错"""
+        cfg = self._minimal_config()
+        cfg["webdav"]["manual"]["enable"] = False
+        monkeypatch.setattr(
+            "alist_mikananirss.webui.services.webdav_service.config_service.get_current_config",
+            AsyncMock(return_value=cfg),
+        )
+
+        service = WebDAVService()
+        with pytest.raises(ValueError):
+            await service.submit_manual_fix(path="/data")
+
+    @pytest.mark.asyncio
+    async def test_submit_manual_fix_failure_marks_job_failed(self, monkeypatch):
+        """执行异常时 Job 标记为失败并记录错误"""
+        monkeypatch.setattr(
+            "alist_mikananirss.webui.services.webdav_service.config_service.get_current_config",
+            AsyncMock(return_value=self._minimal_config()),
+        )
+        service = WebDAVService()
+        monkeypatch.setattr(service, "_execute_manual_fix", AsyncMock(side_effect=RuntimeError("boom")))
+
+        job = await service.submit_manual_fix(path="/data")
+        await asyncio.sleep(0.05)
+
+        stored = await service.get_job(job.id)
+        assert stored is not None
+        assert stored.status == WebdavJobStatus.FAILED
+        assert "boom" in (stored.error or "")
 
 
 # 测试工具函数

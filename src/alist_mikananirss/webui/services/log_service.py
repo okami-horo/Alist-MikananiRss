@@ -9,12 +9,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator, Dict, List, Optional, Tuple, Union
 
-from ..models import LogEntry, LogFileInfo
+from ..models import LogEntry, LogFileInfo, LogLevel
 
 
 LOG_DIR_ENV = "ALMR_LOG_DIR"
 DEFAULT_LOG_SUBDIR = "log"
 USER_DATA_LOG_DIR = Path.home() / ".alist-mikananirss" / "log"
+DEFAULT_MAX_FILES = 5
+DEFAULT_MAX_ENTRIES = 2000
+DEFAULT_PAGE_LIMIT = 1000
 
 
 def resolve_log_dir(candidate: Optional[Union[str, Path]] = None) -> Path:
@@ -56,14 +59,16 @@ class LogService:
     async def get_log_files(self) -> List[LogFileInfo]:
         files: List[LogFileInfo] = []
         for path in sorted(self.log_dir.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True):
+            if not path.is_file():
+                continue
             stat = path.stat()
             files.append(
                 LogFileInfo(
                     name=path.name,
-                    path=str(path),
+                    path=str(path.resolve()),
                     size=stat.st_size,
                     modified_time=datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    log_level="INFO",
+                    log_level=self._probe_primary_level(path),
                 )
             )
         return files
@@ -76,20 +81,24 @@ class LogService:
         level: Optional[str] = None,
         search: Optional[str] = None,
     ) -> Dict[str, object]:
+        resolved_limit = min(max(limit, 1), DEFAULT_PAGE_LIMIT)
+        resolved_offset = max(offset, 0)
+
         entries = await asyncio.to_thread(self._load_entries, file)
         filtered = self._filter_entries(entries, level=level, search=search)
-        total = len(filtered)
-        slice_end = offset + limit
-        page_entries = filtered[offset:slice_end]
+
+        slice_end = resolved_offset + resolved_limit
+        page_entries = filtered[resolved_offset:slice_end]
         return {
             "entries": [entry.model_dump() for entry in page_entries],
-            "total": total,
-            "has_more": slice_end < total,
+            "total": len(filtered),
+            "has_more": slice_end < len(filtered),
         }
 
     async def get_recent_logs(self, limit: int = 10) -> List[Dict[str, object]]:
-        entries = await asyncio.to_thread(self._collect_all_entries)
-        recent = list(reversed(entries))[:limit]
+        resolved_limit = min(max(limit, 1), DEFAULT_PAGE_LIMIT)
+        entries = await asyncio.to_thread(self._collect_all_entries, DEFAULT_MAX_FILES, DEFAULT_MAX_ENTRIES)
+        recent = sorted(entries, key=self._entry_timestamp, reverse=True)[:resolved_limit]
         return [entry.model_dump() for entry in recent]
 
     async def search_logs(
@@ -98,9 +107,11 @@ class LogService:
         level: Optional[str] = None,
         limit: int = 100,
     ) -> Dict[str, object]:
-        entries = await asyncio.to_thread(self._collect_all_entries)
+        resolved_limit = min(max(limit, 1), DEFAULT_PAGE_LIMIT)
+        entries = await asyncio.to_thread(self._collect_all_entries, DEFAULT_MAX_FILES, DEFAULT_MAX_ENTRIES)
         filtered = self._filter_entries(entries, level=level, search=query)
-        limited = filtered[:limit]
+        filtered = sorted(filtered, key=self._entry_timestamp, reverse=True)
+        limited = filtered[:resolved_limit]
         return {
             "entries": [entry.model_dump() for entry in limited],
             "total": len(filtered),
@@ -108,11 +119,22 @@ class LogService:
         }
 
     async def get_log_file_path(self, file_name: str) -> Optional[Path]:
-        path = self.log_dir / file_name
-        return path if path.exists() else None
+        path = self._safe_join_log_dir(file_name)
+        return path if path.exists() and path.is_file() else None
 
     def _get_log_file_path(self, file_name: str) -> Path:
-        return self.log_dir / file_name
+        return self._safe_join_log_dir(file_name)
+
+    def _safe_join_log_dir(self, file_name: str) -> Path:
+        safe_name = Path(file_name).name
+        path = (self.log_dir / safe_name).resolve()
+        try:
+            log_root = self.log_dir.resolve()
+        except FileNotFoundError:  # pragma: no cover - unexpected deletion
+            log_root = self.log_dir
+        if log_root not in path.parents and path != log_root:
+            raise FileNotFoundError(f"Log file '{file_name}' not found in log directory.")
+        return path
 
     async def stream_log_entries(
         self,
@@ -192,21 +214,26 @@ class LogService:
             filtered.append(entry)
         return filtered
 
-    def _collect_all_entries(self) -> List[LogEntry]:
+    def _collect_all_entries(self, max_files: int = DEFAULT_MAX_FILES, max_entries: Optional[int] = DEFAULT_MAX_ENTRIES) -> List[LogEntry]:
         entries: List[LogEntry] = []
         log_files = sorted(
             self.log_dir.glob("*.log"),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
-        )[:1]
+        )[:max_files]
         for path in log_files:
+            if not path.is_file():
+                continue
             entries.extend(self._load_entries_from_path(path))
+            if max_entries and len(entries) >= max_entries:
+                entries = entries[:max_entries]
+                break
         return entries
 
     def _load_entries(self, file_name: str) -> List[LogEntry]:
-        path = self.log_dir / file_name
-        if not path.exists():
-            raise FileNotFoundError(file_name)
+        path = self._safe_join_log_dir(file_name)
+        if not path.exists() or not path.is_file():
+            raise FileNotFoundError(f"Log file '{file_name}' not found in {self.log_dir}")
         return self._load_entries_from_path(path)
 
     def _load_entries_from_path(self, path: Path) -> List[LogEntry]:
@@ -225,12 +252,8 @@ class LogService:
         parts = [part.strip() for part in line.split("|", maxsplit=2)]
         if len(parts) == 3:
             timestamp_str, level_str, message = parts
-            try:
-                parsed_dt = datetime.fromisoformat(timestamp_str)
-                timestamp_iso = parsed_dt.isoformat(timespec="seconds")
-            except ValueError:
-                timestamp_iso = datetime.now().isoformat(timespec="seconds")
-            level = level_str.upper() if level_str else "INFO"
+            timestamp_iso = self._normalise_timestamp(timestamp_str)
+            level = level_str.upper() if level_str else LogLevel.INFO.value
             return LogEntry(
                 timestamp=timestamp_iso,
                 level=level,
@@ -240,6 +263,33 @@ class LogService:
                 thread_id=None,
             )
 
+        return None
+
+    def _normalise_timestamp(self, timestamp_str: str) -> str:
+        try:
+            parsed_dt = datetime.fromisoformat(timestamp_str)
+        except ValueError:
+            try:
+                parsed_dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                parsed_dt = datetime.now()
+        return parsed_dt.isoformat(timespec="seconds")
+
+    def _entry_timestamp(self, entry: LogEntry) -> datetime:
+        try:
+            return datetime.fromisoformat(entry.timestamp)
+        except ValueError:  # pragma: no cover - defensive
+            return datetime.now()
+
+    def _probe_primary_level(self, path: Path) -> Optional[str]:
+        try:
+            with path.open("r", encoding="utf-8", errors="ignore") as handle:
+                for raw in handle:
+                    parsed = self._parse_log_line(raw.rstrip())
+                    if parsed:
+                        return parsed.level
+        except OSError:  # pragma: no cover - best effort
+            return None
         return None
 
 

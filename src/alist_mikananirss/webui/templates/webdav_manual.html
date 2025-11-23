@@ -111,6 +111,8 @@
         recursive_scan: true,
         conflict_strategy: 'skip',
     };
+    let currentJobId = null;
+    let jobPollTimer = null;
 
     document.addEventListener('DOMContentLoaded', function() {
         setActiveNav('webdav');
@@ -156,6 +158,8 @@
 
     function resetManualForm() {
         applyManualDefaults();
+        stopJobPolling();
+        currentJobId = null;
         document.getElementById('manualFixResult').innerHTML = `
             <div class="text-center text-muted">
                 <i class="bi bi-inbox fs-1"></i>
@@ -235,16 +239,13 @@
                 body: JSON.stringify(payload),
             });
 
-            renderManualResult(response);
-            showNotification(response.message || '手动修复完成', 'success');
+            currentJobId = response.job_id;
+            renderJobStatus(response);
+            startJobPolling();
+            showNotification(response.message || '手动修复任务已创建', 'success');
         } catch (error) {
             console.error('执行手动修复失败:', error);
-            document.getElementById('manualFixResult').innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="bi bi-x-circle me-2"></i>
-                    手动修复失败: ${error.message}
-                </div>
-            `;
+            renderJobError(error.message);
             showNotification('手动修复失败: ' + error.message, 'danger');
         } finally {
             button.disabled = false;
@@ -322,20 +323,87 @@
         return `${parts.join('')}${lineHtml}`;
     }
 
-    function renderManualResult(response) {
-        const result = response.result || {};
-        const options = response.options || {};
+    function startJobPolling() {
+        stopJobPolling();
+        if (!currentJobId) {
+            return;
+        }
+        jobPollTimer = setInterval(fetchJobStatus, 2000);
+        fetchJobStatus();
+    }
 
-        const summary = `
+    async function fetchJobStatus() {
+        if (!currentJobId) {
+            return;
+        }
+        try {
+            const job = await apiCall(`/api/webdav/jobs/${encodeURIComponent(currentJobId)}`);
+            renderJobStatus(job);
+            if (job.status === 'completed' || job.status === 'failed') {
+                stopJobPolling();
+            }
+        } catch (error) {
+            showNotification('查询任务状态失败: ' + error.message, 'warning');
+        }
+    }
+
+    function stopJobPolling() {
+        if (jobPollTimer) {
+            clearInterval(jobPollTimer);
+            jobPollTimer = null;
+        }
+    }
+
+    function renderJobStatus(job) {
+        const container = document.getElementById('manualFixResult');
+        if (!container) {
+            return;
+        }
+
+        const statusMap = {
+            queued: { class: 'bg-secondary', label: '排队中' },
+            running: { class: 'bg-info', label: '运行中' },
+            completed: { class: 'bg-success', label: '已完成' },
+            failed: { class: 'bg-danger', label: '失败' },
+        };
+        const badge = statusMap[job.status] || statusMap.queued;
+        const options = job.options || {};
+        const result = job.result || {};
+
+        let detailsHtml = '';
+        if (Array.isArray(result.details) && result.details.length) {
+            detailsHtml += '<h6 class="mt-3">处理明细</h6><ul class="list-group list-group-flush">';
+            result.details.forEach(item => {
+                const content = formatManualDetailItem(item);
+                detailsHtml += `<li class="list-group-item">${content}</li>`;
+            });
+            detailsHtml += '</ul>';
+        }
+
+        if (Array.isArray(result.errors) && result.errors.length) {
+            detailsHtml += '<div class="alert alert-danger mt-3" role="alert">';
+            detailsHtml += '<h6 class="alert-heading">错误详情</h6><ul class="mb-0">';
+            result.errors.forEach(err => {
+                detailsHtml += `<li>${escapeHtml(err)}</li>`;
+            });
+            detailsHtml += '</ul></div>';
+        }
+
+        container.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <span class="badge ${badge.class}">${badge.label}</span>
+                    <span class="ms-2 text-muted">Job ID: ${job.job_id || 'N/A'}</span>
+                </div>
+                <span class="text-muted">${job.finished_at || job.started_at || job.created_at || ''}</span>
+            </div>
             <ul class="list-unstyled mb-0">
-                <li><strong>目标目录:</strong> ${response.target_dir || 'N/A'}</li>
-                <li><strong>执行模式:</strong> ${response.dry_run ? '预览（未执行）' : '实际执行'}</li>
+                <li><strong>目标目录:</strong> ${job.target_dir || 'N/A'}</li>
+                <li><strong>模式:</strong> ${job.dry_run ? '预览（未执行）' : '实际执行'}</li>
                 <li><strong>递归扫描:</strong> ${options.recursive_scan ? '是' : '否'}</li>
                 <li><strong>冲突策略:</strong> ${options.conflict_strategy || 'skip'}</li>
             </ul>
-        `;
-
-        const stats = `
+            <hr>
             <div class="row text-center">
                 <div class="col-6 col-sm-3">
                     <div class="fs-4 fw-bold">${result.total_found ?? 0}</div>
@@ -354,37 +422,26 @@
                     <div class="text-muted">错误</div>
                 </div>
             </div>
-        `;
-
-        let detailsHtml = '';
-        if (Array.isArray(result.details) && result.details.length) {
-            detailsHtml += '<h6 class="mt-3">处理明细</h6><ul class="list-group list-group-flush">';
-            result.details.forEach(item => {
-                const content = formatManualDetailItem(item);
-                detailsHtml += `<li class="list-group-item">${content}</li>`;
-            });
-            detailsHtml += '</ul>';
-        }
-
-        if (Array.isArray(result.errors) && result.errors.length) {
-            detailsHtml += '<div class="alert alert-danger mt-3" role="alert">';
-            detailsHtml += '<h6 class="alert-heading">错误详情</h6><ul class="mb-0">';
-            result.errors.forEach(err => {
-                detailsHtml += `<li>${err}</li>`;
-            });
-            detailsHtml += '</ul></div>';
-        }
-
-        document.getElementById('manualFixResult').innerHTML = `
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <span class="badge ${response.dry_run ? 'bg-secondary' : 'bg-success'}">${response.dry_run ? '预览模式' : '实际执行'}</span>
-                <span class="text-muted">${new Date().toLocaleString('zh-CN')}</span>
-            </div>
-            ${summary}
-            <hr>
-            ${stats}
             ${detailsHtml}
+            ${job.error ? `<div class="alert alert-danger mt-3 mb-0">${escapeHtml(job.error)}</div>` : ''}
         `;
     }
+
+    function renderJobError(message) {
+        const container = document.getElementById('manualFixResult');
+        if (!container) {
+            return;
+        }
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-x-circle me-2"></i>
+                手动修复失败: ${escapeHtml(message)}
+            </div>
+        `;
+    }
+
+    window.addEventListener('beforeunload', function() {
+        stopJobPolling();
+    });
 </script>
 {% endblock %}

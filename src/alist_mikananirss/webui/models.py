@@ -5,7 +5,7 @@ WebUI数据模型定义
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -131,6 +131,31 @@ class LogFilter(BaseModel):
         if start_time and v and start_time >= v:
             raise ValueError("结束时间必须大于开始时间")
         return v
+
+
+class WebdavJobStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class WebdavManualFixJob(BaseModel):
+    id: str
+    status: WebdavJobStatus
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    target_dir: Optional[str] = None
+    dry_run: Optional[bool] = None
+    options: Optional[Dict[str, Any]] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    message: Optional[str] = None
+
+    @field_serializer("created_at", "started_at", "finished_at")
+    def serialize_dt(self, value: Optional[datetime]) -> Optional[str]:
+        return value.isoformat() if value else None
 
 
 class ConfigValidationResult(BaseModel):

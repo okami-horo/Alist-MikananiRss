@@ -78,15 +78,15 @@
 
 ### Implementation for User Story 3
 
-- [ ] T022 [P] [US3] 完善 LogService 的日志解析、过滤与分页能力，支持 level/search 参数并在文件缺失时给出清晰错误（src/alist_mikananirss/webui/services/log_service.py）
-- [ ] T023 [P] [US3] 校准 `/api/logs/files`、`/api/logs/content`、`/api/logs/recent`、`/api/logs/search`、`/api/logs/stream` 的行为与 openapi 合约和快速开始文档（src/alist_mikananirss/webui/api/logs.py）
-- [ ] T024 [US3] 实现/完善日志页面模板，包括日志文件选择、级别和关键字过滤、最近活动区域（src/alist_mikananirss/webui/templates/logs.html）
-- [ ] T025 [P] [US3] 为日志页面编写前端脚本，集成分页加载、搜索与 SSE 实时尾随接口（src/alist_mikananirss/webui/static/js/logs.js）
-- [ ] T026 [P] [US3] 实现 WebDAV 手动修复服务封装，负责调用底层修复脚本/逻辑并返回结构化结果；对于可能长时间运行的修复过程，以 Job 形式管理并对外暴露 Job 状态（src/alist_mikananirss/webui/services/webdav_service.py）
-- [ ] T027 [US3] 检查并完善 `/api/webdav/manual-fix` 路由的请求校验、错误映射和响应模型，使其在长任务场景下返回 Job ID，并提供基于 Job ID 的状态查询接口以满足 FR-008 要求（src/alist_mikananirss/webui/api/webdav.py）
-- [ ] T028 [US3] 为 WebDAV 手动修复页面实现表单与结果展示，包括预览与实际执行模式，并在 UI 中展示 Job 状态与最终结果（src/alist_mikananirss/webui/templates/webdav_manual.html）
+- [x] T022 [P] [US3] 完善 LogService 的日志解析、过滤与分页能力，支持 level/search 参数并在文件缺失时给出清晰错误（src/alist_mikananirss/webui/services/log_service.py）
+- [x] T023 [P] [US3] 校准 `/api/logs/files`、`/api/logs/content`、`/api/logs/recent`、`/api/logs/search`、`/api/logs/stream` 的行为与 openapi 合约和快速开始文档（src/alist_mikananirss/webui/api/logs.py）
+- [x] T024 [US3] 实现/完善日志页面模板，包括日志文件选择、级别和关键字过滤、最近活动区域（src/alist_mikananirss/webui/templates/logs.html）
+- [x] T025 [P] [US3] 为日志页面编写前端脚本，集成分页加载、搜索与 SSE 实时尾随接口（src/alist_mikananirss/webui/static/js/logs.js）
+- [x] T026 [P] [US3] 实现 WebDAV 手动修复服务封装，负责调用底层修复脚本/逻辑并返回结构化结果；对于可能长时间运行的修复过程，以 Job 形式管理并对外暴露 Job 状态（src/alist_mikananirss/webui/services/webdav_service.py）
+- [x] T027 [US3] 检查并完善 `/api/webdav/manual-fix` 路由的请求校验、错误映射和响应模型，使其在长任务场景下返回 Job ID，并提供基于 Job ID 的状态查询接口以满足 FR-008 要求（src/alist_mikananirss/webui/api/webdav.py）
+- [x] T028 [US3] 为 WebDAV 手动修复页面实现表单与结果展示，包括预览与实际执行模式，并在 UI 中展示 Job 状态与最终结果（src/alist_mikananirss/webui/templates/webdav_manual.html）
 - [ ] T029 [US3] 在 WebUI 集成测试中增加“WebDAV 嵌套修复（预览+执行）”场景覆盖，验证长时间运行的修复任务以 Job 形式返回 Job ID 且可通过轮询接口查询状态，并优先通过该用例驱动 Job 管理与 UI/API 行为的实现（Test-First）（tests/webui/test_integration.py）
-- [ ] T039 [P] [US3] 根据 data-model 中 `WebdavManualFixJob` 定义梳理并实现 WebUI 层 Job 模型与状态存储（创建/运行中/完成/失败），并为后续其他长时间操作复用该 Job 管理机制（src/alist_mikananirss/webui/services/webdav_service.py）
+- [x] T039 [P] [US3] 根据 data-model 中 `WebdavManualFixJob` 定义梳理并实现 WebUI 层 Job 模型与状态存储（创建/运行中/完成/失败），并为后续其他长时间操作复用该 Job 管理机制（src/alist_mikananirss/webui/services/webdav_service.py）
 
 **Checkpoint**: 维护者可以通过 WebUI 日志页面和 WebDAV 页面完成问题排查与目录修复，相关路径有自动化测试覆盖。
 
